@@ -15,6 +15,17 @@ A Node.js tool that polls new SVN revisions or Git commits, fetches each change 
    - write the result to `~/.kodevu/`
 5. Update `~/.kodevu/state.json` so the same change is not reviewed twice.
 
+## Quick start
+
+```bash
+npx kodevu /path/to/your/repo
+```
+
+No config file is required for the default flow.
+Review reports are written to `~/.kodevu/`, and review state is stored at `~/.kodevu/state.json`.
+
+If you want a config file, run `npx kodevu init` to create `./config.json` in the current directory.
+
 ## Setup
 
 ```bash
@@ -36,13 +47,13 @@ If you do not pass `--config`, Kodevu will try to load `./config.json` from the 
 
 ## Run
 
-Run once:
+Run:
 
 ```bash
 npx kodevu /path/to/your/repo
 ```
 
-Run once with debug logs:
+Run with debug logs:
 
 ```bash
 npx kodevu /path/to/your/repo --debug
