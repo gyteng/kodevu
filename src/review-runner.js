@@ -4,6 +4,12 @@ import path from "node:path";
 import { runCommand } from "./shell.js";
 import { resolveRepositoryContext } from "./vcs-client.js";
 
+function debugLog(config, message) {
+  if (config.debug) {
+    console.error(`[debug] ${message}`);
+  }
+}
+
 const REVIEWERS = {
   codex: {
     displayName: "Codex",
@@ -29,7 +35,8 @@ const REVIEWERS = {
           cwd: workingDir,
           input: [promptText, "Unified diff:", diffText].join("\n\n"),
           allowFailure: true,
-          timeoutMs: config.commandTimeoutMs
+          timeoutMs: config.commandTimeoutMs,
+          debug: config.debug
         });
 
         let message = "";
@@ -58,7 +65,8 @@ const REVIEWERS = {
         cwd: workingDir,
         input: ["Unified diff:", diffText].join("\n\n"),
         allowFailure: true,
-        timeoutMs: config.commandTimeoutMs
+        timeoutMs: config.commandTimeoutMs,
+        debug: config.debug
       });
 
       return {
@@ -294,10 +302,18 @@ export async function runReviewCycle(config) {
   await ensureDir(config.outputDir);
 
   const { backend, targetInfo } = await resolveRepositoryContext(config);
+  debugLog(
+    config,
+    `Resolved repository context: backend=${backend.kind} target=${targetInfo.targetDisplay || config.target} stateKey=${targetInfo.stateKey}`
+  );
   const latestChangeId = await backend.getLatestChangeId(config, targetInfo);
   const stateFile = await loadState(config.stateFilePath);
   const projectState = getProjectState(stateFile, targetInfo);
   let lastReviewedId = readLastReviewedId(projectState, backend, targetInfo);
+  debugLog(
+    config,
+    `Checkpoint status: latest=${backend.formatChangeId(latestChangeId)} lastReviewed=${lastReviewedId ? backend.formatChangeId(lastReviewedId) : "(none)"}`
+  );
 
   if (lastReviewedId) {
     const checkpointIsValid = await backend.isValidCheckpoint(config, targetInfo, lastReviewedId, latestChangeId);
@@ -323,6 +339,8 @@ export async function runReviewCycle(config) {
     );
   }
 
+  debugLog(config, `Planned ${changeIdsToReview.length} ${backend.changeName}(s) for this cycle.`);
+
   if (changeIdsToReview.length === 0) {
     const lastKnownId = lastReviewedId ? backend.formatChangeId(lastReviewedId) : "(none)";
     console.log(`No new ${backend.changeName}s. Last reviewed: ${lastKnownId}`);
@@ -332,11 +350,13 @@ export async function runReviewCycle(config) {
   console.log(`Reviewing ${backend.displayName} ${backend.changeName}s ${formatChangeList(backend, changeIdsToReview)}`);
 
   for (const changeId of changeIdsToReview) {
+    debugLog(config, `Starting review for ${backend.formatChangeId(changeId)}.`);
     const result = await reviewChange(config, backend, targetInfo, changeId);
     console.log(`Reviewed ${backend.formatChangeId(changeId)}: ${result.outputFile}`);
     const nextProjectState = buildStateSnapshot(backend, targetInfo, changeId);
     await saveState(config.stateFilePath, updateProjectState(stateFile, targetInfo, nextProjectState));
     stateFile.projects[targetInfo.stateKey] = nextProjectState;
+    debugLog(config, `Saved checkpoint for ${backend.formatChangeId(changeId)} to ${config.stateFilePath}.`);
   }
 
   const remainingChanges = await backend.getPendingChangeIds(

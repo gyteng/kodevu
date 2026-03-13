@@ -21,6 +21,7 @@ export function parseCliArgs(argv) {
     command: "run",
     configPath: "config.json",
     once: false,
+    debug: false,
     help: false,
     commandExplicitlySet: false
   };
@@ -44,6 +45,11 @@ export function parseCliArgs(argv) {
       continue;
     }
 
+    if (value === "--debug" || value === "-d") {
+      args.debug = true;
+      continue;
+    }
+
     if (value === "--config" || value === "-c") {
       const configPath = argv[index + 1];
       if (!configPath || configPath.startsWith("-")) {
@@ -59,7 +65,7 @@ export function parseCliArgs(argv) {
   return args;
 }
 
-export async function loadConfig(configPath) {
+export async function loadConfig(configPath, cliArgs = {}) {
   const absoluteConfigPath = path.resolve(configPath);
   const raw = await fs.readFile(absoluteConfigPath, "utf8");
   const config = {
@@ -77,6 +83,7 @@ export async function loadConfig(configPath) {
 
   config.vcs = String(config.vcs || "auto").toLowerCase();
   config.reviewer = String(config.reviewer || "codex").toLowerCase();
+  config.debug = Boolean(cliArgs.debug);
 
   if (!["auto", "svn", "git"].includes(config.vcs)) {
     throw new Error(`"vcs" must be one of "auto", "svn", or "git" in ${absoluteConfigPath}`);
@@ -115,6 +122,7 @@ Usage:
 
 Options:
   --config, -c   Path to config json. Default: ./config.json in the current directory
+  --debug, -d    Print extra debug information to the console
   --once         Run one polling cycle and exit
   --help, -h     Show help
 

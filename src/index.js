@@ -30,7 +30,22 @@ if (cliArgs.command === "init") {
   }
 }
 
-const config = await loadConfig(cliArgs.configPath);
+const config = await loadConfig(cliArgs.configPath, cliArgs);
+
+if (config.debug) {
+  console.error(
+    `[debug] Loaded config: ${JSON.stringify({
+      configPath: config.configPath,
+      vcs: config.vcs,
+      reviewer: config.reviewer,
+      target: config.target,
+      pollCron: config.pollCron,
+      outputDir: config.outputDir,
+      debug: config.debug,
+      once: cliArgs.once
+    })}`
+  );
+}
 
 let running = false;
 

@@ -38,7 +38,8 @@ function repoPathFromUrl(rootUrl, url) {
 export async function getTargetInfo(config) {
   const result = await runCommand(SVN_COMMAND, ["info", "--xml", config.target], {
     encoding: COMMAND_ENCODING,
-    trim: true
+    trim: true,
+    debug: config.debug
   });
   const parsed = xmlParser.parse(result.stdout);
   const entry = parsed?.info?.entry;
@@ -70,7 +71,7 @@ export async function getLatestRevision(config, targetInfo) {
   const result = await runCommand(
     SVN_COMMAND,
     ["log", "--xml", "-r", "HEAD:1", "-l", "1", getRemoteTarget(targetInfo, config)],
-    { encoding: COMMAND_ENCODING, trim: true }
+    { encoding: COMMAND_ENCODING, trim: true, debug: config.debug }
   );
   const parsed = xmlParser.parse(result.stdout);
   const entry = parsed?.log?.logentry;
@@ -100,7 +101,7 @@ export async function getPendingRevisions(config, targetInfo, startExclusive, en
       `${startRevision}:${endInclusive}`,
       getRemoteTarget(targetInfo, config)
     ],
-    { encoding: COMMAND_ENCODING, trim: true }
+    { encoding: COMMAND_ENCODING, trim: true, debug: config.debug }
   );
   const parsed = xmlParser.parse(result.stdout);
 
@@ -115,7 +116,7 @@ export async function getRevisionDiff(config, revision) {
   const result = await runCommand(
     SVN_COMMAND,
     ["diff", "--git", "--internal-diff", "--ignore-properties", "-c", String(revision), config.target],
-    { encoding: COMMAND_ENCODING, trim: false }
+    { encoding: COMMAND_ENCODING, trim: false, debug: config.debug }
   );
 
   return result.stdout;
@@ -145,7 +146,7 @@ export async function getRevisionDetails(config, targetInfo, revision) {
   const result = await runCommand(
     SVN_COMMAND,
     ["log", "--xml", "-v", "-c", String(revision), getRemoteTarget(targetInfo, config)],
-    { encoding: COMMAND_ENCODING, trim: true }
+    { encoding: COMMAND_ENCODING, trim: true, debug: config.debug }
   );
   const parsed = xmlParser.parse(result.stdout);
   const entry = parsed?.log?.logentry;

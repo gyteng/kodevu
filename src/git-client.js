@@ -31,6 +31,7 @@ async function statPath(targetPath) {
 async function runGit(config, args, options = {}) {
   return await runCommand(GIT_COMMAND, args, {
     encoding: COMMAND_ENCODING,
+    debug: config.debug,
     ...options
   });
 }

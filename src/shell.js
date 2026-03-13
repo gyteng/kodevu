@@ -1,6 +1,21 @@
 import spawn from "cross-spawn";
 import iconv from "iconv-lite";
 
+function debugLog(enabled, message) {
+  if (enabled) {
+    console.error(`[debug] ${message}`);
+  }
+}
+
+function summarizeOutput(text) {
+  if (!text) {
+    return "(empty)";
+  }
+
+  const normalized = text.replace(/\s+/g, " ").trim();
+  return normalized.length > 400 ? `${normalized.slice(0, 400)}...` : normalized;
+}
+
 export async function runCommand(command, args = [], options = {}) {
   const {
     cwd,
@@ -9,8 +24,14 @@ export async function runCommand(command, args = [], options = {}) {
     encoding = "utf8",
     allowFailure = false,
     timeoutMs = 0,
-    trim = false
+    trim = false,
+    debug = false
   } = options;
+
+  debugLog(
+    debug,
+    `run: ${command} ${args.join(" ")}${cwd ? ` | cwd=${cwd}` : ""}${timeoutMs > 0 ? ` | timeoutMs=${timeoutMs}` : ""}`
+  );
 
   return await new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -50,6 +71,11 @@ export async function runCommand(command, args = [], options = {}) {
         stdout: trim ? stdout.trim() : stdout,
         stderr: trim ? stderr.trim() : stderr
       };
+
+      debugLog(
+        debug,
+        `exit: ${command} code=${result.code} timedOut=${result.timedOut} stdout=${summarizeOutput(result.stdout)} stderr=${summarizeOutput(result.stderr)}`
+      );
 
       if ((result.code !== 0 || result.timedOut) && !allowFailure) {
         const error = new Error(

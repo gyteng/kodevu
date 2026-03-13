@@ -41,6 +41,12 @@ Run one cycle:
 npx kodevu --once
 ```
 
+Run one cycle with debug logs:
+
+```bash
+npx kodevu --once --debug
+```
+
 Start the scheduler:
 
 ```bash
@@ -52,6 +58,8 @@ Use a custom config path only when needed:
 ```bash
 npx kodevu --config ./config.current.json --once
 ```
+
+`--debug` / `-d` is a CLI-only switch. It is not read from `config.json`.
 
 ## Config
 
@@ -70,6 +78,7 @@ Internal defaults:
 - review state is always stored in `./data/state.json`
 - the tool always invokes `git`, `svn`, and the configured reviewer CLI from `PATH`
 - command output is decoded as `utf8`
+- debug logging is enabled only by passing `--debug` or `-d`
 
 ## Target Rules
 
