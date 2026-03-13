@@ -25,8 +25,17 @@ function createSvnBackend() {
       return `r${revision}`;
     },
     getReportFileName(revision) {
-      return `r${revision}.md`;
+      const now = new Date();
+      const datePrefix = now.getFullYear() +
+        String(now.getMonth() + 1).padStart(2, '0') +
+        String(now.getDate()).padStart(2, '0') +
+        '-' +
+        String(now.getHours()).padStart(2, '0') +
+        String(now.getMinutes()).padStart(2, '0') +
+        String(now.getSeconds()).padStart(2, '0');
+      return `${datePrefix}-svn-r${revision}.md`;
     },
+
     async getTargetInfo(config) {
       return await svnClient.getTargetInfo(config);
     },
@@ -86,8 +95,17 @@ function createGitBackend() {
       return commitHash.slice(0, 12);
     },
     getReportFileName(commitHash) {
-      return `git-${commitHash.slice(0, 12)}.md`;
+      const now = new Date();
+      const datePrefix = now.getFullYear() +
+        String(now.getMonth() + 1).padStart(2, '0') +
+        String(now.getDate()).padStart(2, '0') +
+        '-' +
+        String(now.getHours()).padStart(2, '0') +
+        String(now.getMinutes()).padStart(2, '0') +
+        String(now.getSeconds()).padStart(2, '0');
+      return `${datePrefix}-git-${commitHash.slice(0, 12)}.md`;
     },
+
     async getTargetInfo(config) {
       return await gitClient.getTargetInfo(config);
     },

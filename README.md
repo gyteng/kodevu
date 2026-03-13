@@ -92,7 +92,7 @@ Internal defaults:
 - Large diffs are truncated before being sent to the reviewer or written into the report once they exceed the configured line or character limits.
 - For Git targets and local SVN working copies, the reviewer command runs from the repository workspace so it can inspect related files beyond the diff when needed.
 - For remote SVN URLs without a local working copy, the review still relies on the diff and change metadata only.
-- SVN reports keep the `r123.md` naming style.
-- Git reports are written as `git-<short-commit-hash>.md`.
+- SVN reports are written as `<YYYYMMDD-HHmmss>-svn-r<revision>.md`.
+- Git reports are written as `<YYYYMMDD-HHmmss>-git-<short-commit-hash>.md`.
 - `~/.kodevu/state.json` stores per-project checkpoints keyed by repository identity; only the v2 multi-project structure is supported.
 - If the reviewer command exits non-zero or times out, the report is still written, but the state is not advanced so the change can be retried later.
