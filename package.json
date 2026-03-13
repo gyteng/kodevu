@@ -1,6 +1,6 @@
 {
   "name": "kodevu",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "type": "module",
   "description": "Poll SVN revisions or Git commits, send each change diff to a reviewer CLI, and write Markdown review reports.",
   "bin": {
