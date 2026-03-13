@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Poll SVN revisions or Git commits, send each change diff to codex exec, and write Markdown review reports.",
+  "description": "Poll SVN revisions or Git commits, send each change diff to a reviewer CLI, and write Markdown review reports.",
   "scripts": {
     "start": "node src/index.js",
     "once": "node src/index.js --once",

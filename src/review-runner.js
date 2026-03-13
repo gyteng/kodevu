@@ -4,7 +4,70 @@ import path from "node:path";
 import { runCommand } from "./shell.js";
 import { resolveRepositoryContext } from "./vcs-client.js";
 
-const CODEX_COMMAND = "codex";
+const REVIEWERS = {
+  codex: {
+    displayName: "Codex",
+    responseSectionTitle: "Codex Response",
+    emptyResponseText: "_No final response returned from codex exec._",
+    async run(config, workingDir, promptText, diffText) {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "kodevu-"));
+      const outputFile = path.join(tempDir, "codex-last-message.md");
+      const args = [
+        "exec",
+        "--skip-git-repo-check",
+        "--sandbox",
+        "read-only",
+        "--color",
+        "never",
+        "--output-last-message",
+        outputFile,
+        "-"
+      ];
+
+      try {
+        const execResult = await runCommand("codex", args, {
+          cwd: workingDir,
+          input: [promptText, "Unified diff:", diffText].join("\n\n"),
+          allowFailure: true,
+          timeoutMs: config.commandTimeoutMs
+        });
+
+        let message = "";
+
+        try {
+          message = await fs.readFile(outputFile, "utf8");
+        } catch {
+          message = execResult.stdout;
+        }
+
+        return {
+          ...execResult,
+          message
+        };
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    }
+  },
+  gemini: {
+    displayName: "Gemini",
+    responseSectionTitle: "Gemini Response",
+    emptyResponseText: "_No final response returned from gemini._",
+    async run(config, workingDir, promptText, diffText) {
+      const execResult = await runCommand("gemini", ["-p", promptText], {
+        cwd: workingDir,
+        input: ["Unified diff:", diffText].join("\n\n"),
+        allowFailure: true,
+        timeoutMs: config.commandTimeoutMs
+      });
+
+      return {
+        ...execResult,
+        message: execResult.stdout
+      };
+    }
+  }
+};
 
 async function ensureDir(targetPath) {
   await fs.mkdir(targetPath, { recursive: true });
@@ -120,7 +183,7 @@ function buildPrompt(config, backend, targetInfo, details) {
   ].join("\n\n");
 }
 
-function buildReport(config, backend, targetInfo, details, diffText, codexResult) {
+function buildReport(config, backend, targetInfo, details, diffText, reviewer, reviewerResult) {
   const lines = [
     `# ${backend.displayName} Review Report: ${details.displayId}`,
     "",
@@ -130,8 +193,9 @@ function buildReport(config, backend, targetInfo, details, diffText, codexResult
     `- Author: \`${details.author}\``,
     `- Commit Date: \`${details.date || "unknown"}\``,
     `- Generated At: \`${new Date().toISOString()}\``,
-    `- Codex Exit Code: \`${codexResult.code}\``,
-    `- Codex Timed Out: \`${codexResult.timedOut ? "yes" : "no"}\``,
+    `- Reviewer: \`${reviewer.displayName}\``,
+    `- Reviewer Exit Code: \`${reviewerResult.code}\``,
+    `- Reviewer Timed Out: \`${reviewerResult.timedOut ? "yes" : "no"}\``,
     "",
     "## Changed Files",
     "",
@@ -153,56 +217,22 @@ function buildReport(config, backend, targetInfo, details, diffText, codexResult
     diffText.trim() || "(empty diff)",
     "```",
     "",
-    "## Codex Response",
+    `## ${reviewer.responseSectionTitle}`,
     "",
-    codexResult.message?.trim() ? codexResult.message.trim() : "_No final response returned from codex exec._"
+    reviewerResult.message?.trim() ? reviewerResult.message.trim() : reviewer.emptyResponseText
   ];
 
   return `${lines.join("\n")}\n`;
 }
 
-async function runCodexPrompt(config, backend, targetInfo, details, diffText) {
-  const args = [];
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "kodevu-"));
-  const outputFile = path.join(tempDir, "codex-last-message.md");
+async function runReviewerPrompt(config, backend, targetInfo, details, diffText) {
+  const reviewer = REVIEWERS[config.reviewer];
   const reviewWorkspaceRoot = getReviewWorkspaceRoot(config, backend, targetInfo);
-
-  args.push(
-    "exec",
-    "--skip-git-repo-check",
-    "--sandbox",
-    "read-only",
-    "--color",
-    "never",
-    "--output-last-message",
-    outputFile,
-    "-"
-  );
-
-  const prompt = [buildPrompt(config, backend, targetInfo, details), "Unified diff:", diffText].join("\n\n");
-  try {
-    const execResult = await runCommand(CODEX_COMMAND, args, {
-      cwd: reviewWorkspaceRoot,
-      input: prompt,
-      allowFailure: true,
-      timeoutMs: config.commandTimeoutMs
-    });
-
-    let message = "";
-
-    try {
-      message = await fs.readFile(outputFile, "utf8");
-    } catch {
-      message = execResult.stdout;
-    }
-
-    return {
-      ...execResult,
-      message
-    };
-  } finally {
-    await fs.rm(tempDir, { recursive: true, force: true });
-  }
+  const promptText = buildPrompt(config, backend, targetInfo, details);
+  return {
+    reviewer,
+    result: await reviewer.run(config, reviewWorkspaceRoot, promptText, diffText)
+  };
 }
 
 function readLastReviewedId(state, backend, targetInfo) {
@@ -244,13 +274,13 @@ async function reviewChange(config, backend, targetInfo, changeId) {
   }
 
   const diffText = await backend.getChangeDiff(config, targetInfo, changeId);
-  const codexResult = await runCodexPrompt(config, backend, targetInfo, details, diffText);
-  const report = buildReport(config, backend, targetInfo, details, diffText, codexResult);
+  const { reviewer, result: reviewerResult } = await runReviewerPrompt(config, backend, targetInfo, details, diffText);
+  const report = buildReport(config, backend, targetInfo, details, diffText, reviewer, reviewerResult);
   const outputFile = path.join(config.outputDir, backend.getReportFileName(changeId));
   await writeTextFile(outputFile, report);
 
-  if (codexResult.code !== 0 || codexResult.timedOut) {
-    throw new Error(`codex exec failed for ${details.displayId}; report written to ${outputFile}`);
+  if (reviewerResult.code !== 0 || reviewerResult.timedOut) {
+    throw new Error(`${reviewer.displayName} failed for ${details.displayId}; report written to ${outputFile}`);
   }
 
   return { success: true, outputFile, details };

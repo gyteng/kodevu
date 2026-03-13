@@ -3,6 +3,7 @@ import path from "node:path";
 
 const defaultConfig = {
   vcs: "auto",
+  reviewer: "codex",
   target: "",
   pollCron: "*/10 * * * *",
   outputDir: "./reports",
@@ -60,9 +61,14 @@ export async function loadConfig(configPath) {
   }
 
   config.vcs = String(config.vcs || "auto").toLowerCase();
+  config.reviewer = String(config.reviewer || "codex").toLowerCase();
 
   if (!["auto", "svn", "git"].includes(config.vcs)) {
     throw new Error(`"vcs" must be one of "auto", "svn", or "git" in ${absoluteConfigPath}`);
+  }
+
+  if (!["codex", "gemini"].includes(config.reviewer)) {
+    throw new Error(`"reviewer" must be one of "codex" or "gemini" in ${absoluteConfigPath}`);
   }
 
   config.configPath = absoluteConfigPath;
@@ -96,6 +102,7 @@ Options:
 
 Config highlights:
   vcs            auto | svn | git
+  reviewer       codex | gemini
   target         Repository target path (Git) or SVN working copy / URL
 `);
 }

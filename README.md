@@ -1,6 +1,6 @@
 # Kodevu
 
-A Node.js tool that polls new SVN revisions or Git commits, fetches each change diff directly from the repository, sends the diff to `codex exec`, and writes the result to Markdown files.
+A Node.js tool that polls new SVN revisions or Git commits, fetches each change diff directly from the repository, sends the diff to a supported reviewer CLI, and writes the result to Markdown files.
 
 ## Workflow
 
@@ -10,8 +10,8 @@ A Node.js tool that polls new SVN revisions or Git commits, fetches each change 
 4. For each change:
    - load metadata and changed paths from SVN or Git
    - generate a unified diff for that single revision or commit
-   - send the diff and change metadata to `codex exec`
-   - allow Codex to inspect related local repository files in read-only mode when a local workspace is available
+   - send the diff and change metadata to the configured reviewer CLI
+   - allow the reviewer to inspect related local repository files in read-only mode when a local workspace is available
    - write the result to `reports/`
 5. Update `data/state.json` so the same change is not reviewed twice.
 
@@ -48,6 +48,7 @@ node src/index.js --config ./config.json --once
 
 - `target`: required repository target
 - `vcs`: `auto`, `svn`, or `git`; default `auto`
+- `reviewer`: `codex` or `gemini`; default `codex`
 - `pollCron`: cron schedule, default every 10 minutes
 - `reviewPrompt`: saved into the report as review context
 - `outputDir`: report output directory; default `./reports`
@@ -58,7 +59,7 @@ node src/index.js --config ./config.json --once
 Internal defaults:
 
 - review state is always stored in `./data/state.json`
-- the tool always invokes `git`, `svn`, and `codex` from `PATH`
+- the tool always invokes `git`, `svn`, and the configured reviewer CLI from `PATH`
 - command output is decoded as `utf8`
 
 ## Target Rules
@@ -70,10 +71,11 @@ Internal defaults:
 
 ## Notes
 
-- The review request is sent through `codex exec` with the diff embedded in the prompt, so it does not depend on `codex review` behavior.
-- For Git targets and local SVN working copies, `codex exec` runs from the repository workspace in read-only mode so it can inspect related files beyond the diff when needed.
+- `reviewer: "codex"` uses `codex exec` with the diff embedded in the prompt.
+- `reviewer: "gemini"` uses `gemini -p` in non-interactive mode.
+- For Git targets and local SVN working copies, the reviewer command runs from the repository workspace so it can inspect related files beyond the diff when needed.
 - For remote SVN URLs without a local working copy, the review still relies on the diff and change metadata only.
 - SVN reports keep the `r123.md` naming style.
 - Git reports are written as `git-<full-commit-hash>.md`.
 - `data/state.json` stores per-project checkpoints keyed by repository identity; only the v2 multi-project structure is supported.
-- If `codex exec` exits non-zero or times out, the report is still written, but the state is not advanced so the change can be retried later.
+- If the reviewer command exits non-zero or times out, the report is still written, but the state is not advanced so the change can be retried later.
