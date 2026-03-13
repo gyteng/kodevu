@@ -86,7 +86,7 @@ function createGitBackend() {
       return commitHash.slice(0, 12);
     },
     getReportFileName(commitHash) {
-      return `git-${commitHash}.md`;
+      return `git-${commitHash.slice(0, 12)}.md`;
     },
     async getTargetInfo(config) {
       return await gitClient.getTargetInfo(config);

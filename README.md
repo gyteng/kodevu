@@ -92,6 +92,6 @@ Internal defaults:
 - For Git targets and local SVN working copies, the reviewer command runs from the repository workspace so it can inspect related files beyond the diff when needed.
 - For remote SVN URLs without a local working copy, the review still relies on the diff and change metadata only.
 - SVN reports keep the `r123.md` naming style.
-- Git reports are written as `git-<full-commit-hash>.md`.
+- Git reports are written as `git-<short-commit-hash>.md`.
 - `data/state.json` stores per-project checkpoints keyed by repository identity; only the v2 multi-project structure is supported.
 - If the reviewer command exits non-zero or times out, the report is still written, but the state is not advanced so the change can be retried later.
