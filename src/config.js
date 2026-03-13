@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,14 +21,16 @@ export function parseCliArgs(argv) {
     command: "run",
     configPath: "config.json",
     once: false,
-    help: false
+    help: false,
+    commandExplicitlySet: false
   };
 
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
 
-    if (value === "init") {
+    if (value === "init" && !args.commandExplicitlySet && index === 0) {
       args.command = "init";
+      args.commandExplicitlySet = true;
       continue;
     }
 
@@ -42,12 +45,17 @@ export function parseCliArgs(argv) {
     }
 
     if (value === "--config" || value === "-c") {
-      args.configPath = argv[index + 1];
+      const configPath = argv[index + 1];
+      if (!configPath || configPath.startsWith("-")) {
+        throw new Error(`Missing value for ${value}`);
+      }
+      args.configPath = configPath;
       index += 1;
       continue;
     }
   }
 
+  delete args.commandExplicitlySet;
   return args;
 }
 
@@ -122,17 +130,15 @@ export async function initConfig(targetPath = "config.json") {
   const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const templatePath = path.join(packageRoot, "config.example.json");
 
-  try {
-    await fs.access(absoluteTargetPath);
-    throw new Error(`Config file already exists: ${absoluteTargetPath}`);
-  } catch (error) {
-    if (error?.code !== "ENOENT") {
-      throw error;
-    }
-  }
-
   await fs.mkdir(path.dirname(absoluteTargetPath), { recursive: true });
-  await fs.copyFile(templatePath, absoluteTargetPath);
+  try {
+    await fs.copyFile(templatePath, absoluteTargetPath, fsConstants.COPYFILE_EXCL);
+  } catch (error) {
+    if (error?.code === "EEXIST") {
+      throw new Error(`Config file already exists: ${absoluteTargetPath}`);
+    }
+    throw error;
+  }
 
   return absoluteTargetPath;
 }

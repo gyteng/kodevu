@@ -23,6 +23,12 @@ npx kodevu init
 
 This creates `config.json` in the current directory from the packaged `config.example.json`.
 
+If you want a different path:
+
+```bash
+npx kodevu init --config ./config.current.json
+```
+
 Then edit `config.json` and set `target`.
 
 `config.json` is the default config file. If you do not pass `--config`, Kodevu will load `./config.json` from the current directory.

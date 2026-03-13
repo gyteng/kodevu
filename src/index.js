@@ -4,7 +4,15 @@ import cron from "node-cron";
 import { initConfig, loadConfig, parseCliArgs, printHelp } from "./config.js";
 import { runReviewCycle } from "./review-runner.js";
 
-const cliArgs = parseCliArgs(process.argv.slice(2));
+let cliArgs;
+
+try {
+  cliArgs = parseCliArgs(process.argv.slice(2));
+} catch (error) {
+  console.error(error?.message || String(error));
+  printHelp();
+  process.exit(1);
+}
 
 if (cliArgs.help) {
   printHelp();
@@ -13,7 +21,7 @@ if (cliArgs.help) {
 
 if (cliArgs.command === "init") {
   try {
-    const createdPath = await initConfig();
+    const createdPath = await initConfig(cliArgs.configPath);
     console.log(`Created config: ${createdPath}`);
     process.exit(0);
   } catch (error) {
