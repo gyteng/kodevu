@@ -402,14 +402,38 @@ async function reviewChange(config, backend, targetInfo, changeId) {
   }
 
   const diffText = await backend.getChangeDiff(config, targetInfo, changeId);
-  const { reviewer, diffPayloads, result: reviewerResult } = await runReviewerPrompt(
-    config,
-    backend,
-    targetInfo,
-    details,
-    diffText
-  );
-  const report = buildReport(config, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult);
+  const reviewersToTry = [config.reviewer, ...(config.fallbackReviewers || [])];
+
+  let reviewer;
+  let diffPayloads;
+  let reviewerResult;
+  let currentReviewerConfig;
+
+  for (const reviewerName of reviewersToTry) {
+    currentReviewerConfig = { ...config, reviewer: reviewerName };
+    debugLog(config, `Trying reviewer: ${reviewerName}`);
+
+    const res = await runReviewerPrompt(
+      currentReviewerConfig,
+      backend,
+      targetInfo,
+      details,
+      diffText
+    );
+    reviewer = res.reviewer;
+    diffPayloads = res.diffPayloads;
+    reviewerResult = res.result;
+
+    if (reviewerResult.code === 0 && !reviewerResult.timedOut) {
+      break;
+    }
+
+    if (reviewerName !== reviewersToTry[reviewersToTry.length - 1]) {
+      console.log(`${reviewer.displayName} failed for ${details.displayId}; trying next reviewer...`);
+    }
+  }
+
+  const report = buildReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult);
   const outputFile = path.join(config.outputDir, backend.getReportFileName(changeId));
   await writeTextFile(outputFile, report);
 

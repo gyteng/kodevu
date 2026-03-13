@@ -39,7 +39,7 @@ function resolveConfigPath(baseDir, value) {
   return path.isAbsolute(value) ? value : path.resolve(baseDir, value);
 }
 
-async function resolveAutoReviewer(debug, loadedConfigPath) {
+async function resolveAutoReviewers(debug, loadedConfigPath) {
   const availableReviewers = [];
 
   for (const reviewerName of SUPPORTED_REVIEWERS) {
@@ -57,7 +57,12 @@ async function resolveAutoReviewer(debug, loadedConfigPath) {
     );
   }
 
-  return availableReviewers[Math.floor(Math.random() * availableReviewers.length)];
+  for (let i = availableReviewers.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [availableReviewers[i], availableReviewers[j]] = [availableReviewers[j], availableReviewers[i]];
+  }
+
+  return availableReviewers;
 }
 
 export function parseCliArgs(argv) {
@@ -177,9 +182,11 @@ export async function loadConfig(configPath, cliArgs = {}) {
   config.reviewer = String(config.reviewer || "auto").toLowerCase();
 
   if (config.reviewer === "auto") {
-    const selectedReviewer = await resolveAutoReviewer(config.debug, loadedConfigPath);
+    const availableReviewers = await resolveAutoReviewers(config.debug, loadedConfigPath);
+    const selectedReviewer = availableReviewers[0];
     config.reviewer = selectedReviewer.reviewerName;
     config.reviewerCommandPath = selectedReviewer.commandPath;
+    config.fallbackReviewers = availableReviewers.map(r => r.reviewerName).slice(1);
     config.reviewerWasAutoSelected = true;
   } else if (!SUPPORTED_REVIEWERS.includes(config.reviewer)) {
     throw new Error(
