@@ -31,11 +31,19 @@ if (cliArgs.command === "init") {
 
 const config = await loadConfig(cliArgs.configPath, cliArgs);
 
+if (config.reviewerWasAutoSelected) {
+  console.log(
+    `Reviewer "auto" selected ${config.reviewer}${config.reviewerCommandPath ? ` (${config.reviewerCommandPath})` : ""}.`
+  );
+}
+
 if (config.debug) {
   console.error(
     `[debug] Loaded config: ${JSON.stringify({
       configPath: config.configPath,
       reviewer: config.reviewer,
+      reviewerCommandPath: config.reviewerCommandPath,
+      reviewerWasAutoSelected: config.reviewerWasAutoSelected,
       target: config.target,
       outputDir: config.outputDir,
       debug: config.debug

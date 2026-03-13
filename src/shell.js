@@ -103,3 +103,23 @@ export async function runCommand(command, args = [], options = {}) {
     }
   });
 }
+
+export async function findCommandOnPath(command, options = {}) {
+  const locator = process.platform === "win32" ? "where" : "which";
+  const result = await runCommand(locator, [command], {
+    allowFailure: true,
+    trim: true,
+    debug: options.debug
+  });
+
+  if (result.code !== 0 || result.timedOut || !result.stdout) {
+    return null;
+  }
+
+  return (
+    result.stdout
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .find(Boolean) || null
+  );
+}

@@ -3,11 +3,13 @@ import { constants as fsConstants } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { findCommandOnPath } from "./shell.js";
 
 const defaultStorageDir = path.join(os.homedir(), ".kodevu");
+const SUPPORTED_REVIEWERS = ["codex", "gemini"];
 
 const defaultConfig = {
-  reviewer: "codex",
+  reviewer: "auto",
   target: "",
   outputDir: defaultStorageDir,
   stateFilePath: path.join(defaultStorageDir, "state.json"),
@@ -35,6 +37,27 @@ function resolveConfigPath(baseDir, value) {
   }
 
   return path.isAbsolute(value) ? value : path.resolve(baseDir, value);
+}
+
+async function resolveAutoReviewer(debug, loadedConfigPath) {
+  const availableReviewers = [];
+
+  for (const reviewerName of SUPPORTED_REVIEWERS) {
+    const commandPath = await findCommandOnPath(reviewerName, { debug });
+    if (commandPath) {
+      availableReviewers.push({ reviewerName, commandPath });
+    }
+  }
+
+  if (availableReviewers.length === 0) {
+    throw new Error(
+      `No reviewer CLI was found in PATH for "reviewer": "auto". Install one of: ${SUPPORTED_REVIEWERS.join(", ")}${
+        loadedConfigPath ? ` (${loadedConfigPath})` : ""
+      }`
+    );
+  }
+
+  return availableReviewers[Math.floor(Math.random() * availableReviewers.length)];
 }
 
 export function parseCliArgs(argv) {
@@ -120,11 +143,18 @@ export async function loadConfig(configPath, cliArgs = {}) {
     throw new Error('Missing target. Pass `npx kodevu <repo-path>` or set "target" in config.json.');
   }
 
-  config.reviewer = String(config.reviewer || "codex").toLowerCase();
   config.debug = Boolean(cliArgs.debug);
+  config.reviewer = String(config.reviewer || "auto").toLowerCase();
 
-  if (!["codex", "gemini"].includes(config.reviewer)) {
-    throw new Error(`"reviewer" must be one of "codex" or "gemini"${loadedConfigPath ? ` in ${loadedConfigPath}` : ""}`);
+  if (config.reviewer === "auto") {
+    const selectedReviewer = await resolveAutoReviewer(config.debug, loadedConfigPath);
+    config.reviewer = selectedReviewer.reviewerName;
+    config.reviewerCommandPath = selectedReviewer.commandPath;
+    config.reviewerWasAutoSelected = true;
+  } else if (!SUPPORTED_REVIEWERS.includes(config.reviewer)) {
+    throw new Error(
+      `"reviewer" must be one of "codex", "gemini", or "auto"${loadedConfigPath ? ` in ${loadedConfigPath}` : ""}`
+    );
   }
 
   config.configPath = loadedConfigPath;
@@ -162,7 +192,7 @@ Options:
   --help, -h     Show help
 
 Config highlights:
-  reviewer       codex | gemini
+  reviewer       codex | gemini | auto
   target         Repository target path (Git) or SVN working copy / URL; CLI positional target overrides config
 `);
 }

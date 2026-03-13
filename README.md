@@ -65,7 +65,7 @@ npx kodevu /path/to/your/repo --config ./config.current.json
 ## Config
 
 - `target`: required repository target; can be provided by config or as the CLI positional argument
-- `reviewer`: `codex` or `gemini`; default `codex`
+- `reviewer`: `codex`, `gemini`, or `auto`; default `auto`
 - `reviewPrompt`: saved into the report as review context
 - `outputDir`: report output directory; default `~/.kodevu`
 - `stateFilePath`: review state file path; default `~/.kodevu/state.json`
@@ -76,7 +76,7 @@ Internal defaults:
 
 - by default, review reports and state are stored under `~/.kodevu`; first run starts from the current latest change instead of replaying full history
 - if `./config.json` is absent, Kodevu still runs with built-in defaults as long as you pass a positional `target`
-- Kodevu invokes `git`, `svn`, and the configured reviewer CLI from `PATH`; debug logging is enabled only by passing `--debug` or `-d`
+- Kodevu invokes `git`, `svn`, and the configured reviewer CLI from `PATH`; when `reviewer` is `auto`, it randomly selects one from the installed reviewer CLIs it can find in `PATH`; debug logging is enabled only by passing `--debug` or `-d`
 
 ## Target Rules
 
@@ -88,6 +88,7 @@ Internal defaults:
 
 - `reviewer: "codex"` uses `codex exec` with the diff embedded in the prompt.
 - `reviewer: "gemini"` uses `gemini -p` in non-interactive mode.
+- `reviewer: "auto"` probes `codex` and `gemini` in `PATH`, then randomly chooses one of the available CLIs for this run.
 - Large diffs are truncated before being sent to the reviewer or written into the report once they exceed the configured line or character limits.
 - For Git targets and local SVN working copies, the reviewer command runs from the repository workspace so it can inspect related files beyond the diff when needed.
 - For remote SVN URLs without a local working copy, the review still relies on the diff and change metadata only.
