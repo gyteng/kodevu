@@ -1,9 +1,16 @@
 {
   "name": "kodevu",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Poll SVN revisions or Git commits, send each change diff to a reviewer CLI, and write Markdown review reports.",
+  "bin": {
+    "kodevu": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "config.example.json"
+  ],
   "scripts": {
     "start": "node src/index.js",
     "once": "node src/index.js --once",

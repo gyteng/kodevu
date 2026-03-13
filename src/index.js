@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import cron from "node-cron";
 import { loadConfig, parseCliArgs, printHelp } from "./config.js";
 import { runReviewCycle } from "./review-runner.js";

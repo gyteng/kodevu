@@ -24,6 +24,13 @@ copy config.example.json config.json
 
 Then edit `config.json` and set `target`.
 
+Install as a CLI package:
+
+```bash
+npm install -g kodevu
+copy config.example.json config.json
+```
+
 ## Run
 
 Run one cycle:
@@ -32,16 +39,40 @@ Run one cycle:
 npm run once
 ```
 
+Or run directly as the published CLI:
+
+```bash
+kodevu --once
+```
+
+Use `npx` without installing globally:
+
+```bash
+npx kodevu --once --config ./config.json
+```
+
 Start the scheduler:
 
 ```bash
 npm start
 ```
 
+Published CLI form:
+
+```bash
+kodevu --config ./config.json
+```
+
 Use a custom config path:
 
 ```bash
 node src/index.js --config ./config.json --once
+```
+
+Equivalent `npx` usage:
+
+```bash
+npx kodevu --config ./config.json --once
 ```
 
 ## Config

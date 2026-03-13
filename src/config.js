@@ -93,7 +93,8 @@ export function printHelp() {
   console.log(`Kodevu
 
 Usage:
-  node src/index.js [--config config.json] [--once]
+  kodevu [--config config.json] [--once]
+  npx kodevu [--config config.json] [--once]
 
 Options:
   --config, -c   Path to config json. Default: ./config.json
