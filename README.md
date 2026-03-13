@@ -18,61 +18,33 @@ A Node.js tool that polls new SVN revisions or Git commits, fetches each change 
 ## Setup
 
 ```bash
-npm install
-copy config.example.json config.json
+npx kodevu init
 ```
+
+This creates `config.json` in the current directory from the packaged `config.example.json`.
 
 Then edit `config.json` and set `target`.
 
-Install as a CLI package:
-
-```bash
-npm install -g kodevu
-copy config.example.json config.json
-```
+`config.json` is the default config file. If you do not pass `--config`, Kodevu will load `./config.json` from the current directory.
 
 ## Run
 
 Run one cycle:
 
 ```bash
-npm run once
-```
-
-Or run directly as the published CLI:
-
-```bash
-kodevu --once
-```
-
-Use `npx` without installing globally:
-
-```bash
-npx kodevu --once --config ./config.json
+npx kodevu --once
 ```
 
 Start the scheduler:
 
 ```bash
-npm start
+npx kodevu
 ```
 
-Published CLI form:
+Use a custom config path only when needed:
 
 ```bash
-kodevu --config ./config.json
-```
-
-Use a custom config path:
-
-```bash
-node src/index.js --config ./config.json --once
-```
-
-Equivalent `npx` usage:
-
-```bash
-npx kodevu --config ./config.json --once
+npx kodevu --config ./config.current.json --once
 ```
 
 ## Config

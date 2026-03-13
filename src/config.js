@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const defaultConfig = {
   vcs: "auto",
@@ -16,6 +17,7 @@ const defaultConfig = {
 
 export function parseCliArgs(argv) {
   const args = {
+    command: "run",
     configPath: "config.json",
     once: false,
     help: false
@@ -23,6 +25,11 @@ export function parseCliArgs(argv) {
 
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
+
+    if (value === "init") {
+      args.command = "init";
+      continue;
+    }
 
     if (value === "--once") {
       args.once = true;
@@ -93,11 +100,13 @@ export function printHelp() {
   console.log(`Kodevu
 
 Usage:
+  kodevu init
+  npx kodevu init
   kodevu [--config config.json] [--once]
   npx kodevu [--config config.json] [--once]
 
 Options:
-  --config, -c   Path to config json. Default: ./config.json
+  --config, -c   Path to config json. Default: ./config.json in the current directory
   --once         Run one polling cycle and exit
   --help, -h     Show help
 
@@ -106,4 +115,24 @@ Config highlights:
   reviewer       codex | gemini
   target         Repository target path (Git) or SVN working copy / URL
 `);
+}
+
+export async function initConfig(targetPath = "config.json") {
+  const absoluteTargetPath = path.resolve(targetPath);
+  const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const templatePath = path.join(packageRoot, "config.example.json");
+
+  try {
+    await fs.access(absoluteTargetPath);
+    throw new Error(`Config file already exists: ${absoluteTargetPath}`);
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  await fs.mkdir(path.dirname(absoluteTargetPath), { recursive: true });
+  await fs.copyFile(templatePath, absoluteTargetPath);
+
+  return absoluteTargetPath;
 }
