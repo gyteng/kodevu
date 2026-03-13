@@ -12,8 +12,8 @@ A Node.js tool that polls new SVN revisions or Git commits, fetches each change 
    - generate a unified diff for that single revision or commit
    - send the diff and change metadata to the configured reviewer CLI
    - allow the reviewer to inspect related local repository files in read-only mode when a local workspace is available
-   - write the result to `reports/`
-5. Update `data/state.json` so the same change is not reviewed twice.
+   - write the result to `~/.kodevu/`
+5. Update `~/.kodevu/state.json` so the same change is not reviewed twice.
 
 ## Setup
 
@@ -22,6 +22,7 @@ npx kodevu init
 ```
 
 This creates `config.json` in the current directory from the packaged `config.example.json`.
+You only need this when you want to override defaults such as `reviewer` or output paths.
 
 If you want a different path:
 
@@ -29,51 +30,52 @@ If you want a different path:
 npx kodevu init --config ./config.current.json
 ```
 
-Then edit `config.json` and set `target`.
+Then edit `config.json` if you want custom settings.
 
-`config.json` is the default config file. If you do not pass `--config`, Kodevu will load `./config.json` from the current directory.
+If you do not pass `--config`, Kodevu will try to load `./config.json` from the current directory only when that file exists. Otherwise it runs with built-in defaults.
 
 ## Run
 
-Run one cycle:
+Run once:
 
 ```bash
-npx kodevu --once
+npx kodevu /path/to/your/repo
 ```
 
-Run one cycle with debug logs:
+Run once with debug logs:
 
 ```bash
-npx kodevu --once --debug
-```
-
-Start the scheduler:
-
-```bash
-npx kodevu
+npx kodevu /path/to/your/repo --debug
 ```
 
 Use a custom config path only when needed:
 
 ```bash
-npx kodevu --config ./config.current.json --once
+npx kodevu --config ./config.current.json
+```
+
+Or combine a config file with a positional target override:
+
+```bash
+npx kodevu /path/to/your/repo --config ./config.current.json
 ```
 
 `--debug` / `-d` is a CLI-only switch. It is not read from `config.json`.
 
 ## Config
 
-- `target`: required repository target
+- `target`: required repository target; can be provided by config or as the CLI positional argument
 - `reviewer`: `codex` or `gemini`; default `codex`
-- `pollCron`: cron schedule, default every 10 minutes
 - `reviewPrompt`: saved into the report as review context
-- `outputDir`: report output directory; default `./reports`
+- `outputDir`: report output directory; default `~/.kodevu`
+- `stateFilePath`: review state file path; default `~/.kodevu/state.json`
 - `commandTimeoutMs`: timeout for a single review command execution in milliseconds
 - `maxRevisionsPerRun`: cap the number of pending changes per polling cycle
 
 Internal defaults:
 
-- review state is always stored in `./data/state.json`, and first run starts from the current latest change instead of replaying full history
+- by default, review reports and state are stored under `~/.kodevu`; first run starts from the current latest change instead of replaying full history
+- if `./config.json` is absent, Kodevu still runs with built-in defaults as long as you pass a positional `target`
 - Kodevu invokes `git`, `svn`, and the configured reviewer CLI from `PATH`; debug logging is enabled only by passing `--debug` or `-d`
 
 ## Target Rules
@@ -81,7 +83,6 @@ Internal defaults:
 - For SVN, `target` can be a working copy path or repository URL.
 - For Git, `target` must be a local repository path or a subdirectory inside a local repository.
 - The tool tries Git first for existing local paths, then falls back to SVN.
-- Legacy `svnTarget` is still accepted for backward compatibility.
 
 ## Notes
 
@@ -92,5 +93,5 @@ Internal defaults:
 - For remote SVN URLs without a local working copy, the review still relies on the diff and change metadata only.
 - SVN reports keep the `r123.md` naming style.
 - Git reports are written as `git-<short-commit-hash>.md`.
-- `data/state.json` stores per-project checkpoints keyed by repository identity; only the v2 multi-project structure is supported.
+- `~/.kodevu/state.json` stores per-project checkpoints keyed by repository identity; only the v2 multi-project structure is supported.
 - If the reviewer command exits non-zero or times out, the report is still written, but the state is not advanced so the change can be retried later.

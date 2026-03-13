@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import cron from "node-cron";
 import { initConfig, loadConfig, parseCliArgs, printHelp } from "./config.js";
 import { runReviewCycle } from "./review-runner.js";
 
@@ -38,43 +37,16 @@ if (config.debug) {
       configPath: config.configPath,
       reviewer: config.reviewer,
       target: config.target,
-      pollCron: config.pollCron,
       outputDir: config.outputDir,
-      debug: config.debug,
-      once: cliArgs.once
+      debug: config.debug
     })}`
   );
 }
 
-let running = false;
-
-async function runOnce() {
-  if (running) {
-    console.log("A review cycle is already running, skipping this trigger.");
-    return;
-  }
-
-  running = true;
-
-  try {
-    await runReviewCycle(config);
-  } catch (error) {
-    console.error(error?.stack || String(error));
-    process.exitCode = 1;
-  } finally {
-    running = false;
-  }
+try {
+  await runReviewCycle(config);
+} catch (error) {
+  console.error(error?.stack || String(error));
+  process.exitCode = 1;
 }
-
-if (cliArgs.once) {
-  await runOnce();
-  process.exit(process.exitCode || 0);
-}
-
-await runOnce();
-
-console.log(`Scheduler started. Cron: ${config.pollCron}`);
-
-cron.schedule(config.pollCron, () => {
-  void runOnce();
-});
+process.exit(process.exitCode || 0);
