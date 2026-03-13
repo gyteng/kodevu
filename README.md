@@ -66,7 +66,7 @@ npx kodevu /path/to/your/repo --config ./config.current.json
 
 - `target`: required repository target; can be provided by config or as the CLI positional argument
 - `reviewer`: `codex`, `gemini`, or `auto`; default `auto`
-- `reviewPrompt`: saved into the report as review context
+- `prompt`: saved into the report as review context
 - `outputDir`: report output directory; default `~/.kodevu`
 - `stateFilePath`: review state file path; default `~/.kodevu/state.json`
 - `commandTimeoutMs`: timeout for a single review command execution in milliseconds

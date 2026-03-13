@@ -284,7 +284,7 @@ function buildPrompt(config, backend, targetInfo, details, reviewDiffPayload) {
   const canReadRelatedFiles = backend.kind === "git" || Boolean(targetInfo.workingCopyPath);
 
   return [
-    config.reviewPrompt,
+    config.prompt,
     canReadRelatedFiles
       ? `You are running inside a read-only workspace rooted at: ${workspaceRoot}`
       : "No local repository workspace is available for this review run.",

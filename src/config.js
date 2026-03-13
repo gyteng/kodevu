@@ -14,7 +14,7 @@ const defaultConfig = {
   outputDir: defaultStorageDir,
   stateFilePath: path.join(defaultStorageDir, "state.json"),
   commandTimeoutMs: 600000,
-  reviewPrompt:
+  prompt:
     "请严格审查当前变更，优先指出 bug、回归风险、兼容性问题、安全问题、边界条件缺陷和缺失测试。请使用简体中文输出 Markdown；如果没有明确缺陷，请写“未发现明确缺陷”，并补充剩余风险。",
   maxRevisionsPerRun: 20
 };
@@ -68,6 +68,8 @@ export function parseCliArgs(argv) {
     target: "",
     debug: false,
     help: false,
+    reviewer: "",
+    prompt: "",
     commandExplicitlySet: false
   };
 
@@ -97,6 +99,26 @@ export function parseCliArgs(argv) {
       }
       args.configPath = configPath;
       args.configExplicitlySet = true;
+      index += 1;
+      continue;
+    }
+
+    if (value === "--reviewer" || value === "-r") {
+      const reviewer = argv[index + 1];
+      if (!reviewer || reviewer.startsWith("-")) {
+        throw new Error(`Missing value for ${value}`);
+      }
+      args.reviewer = reviewer;
+      index += 1;
+      continue;
+    }
+
+    if (value === "--prompt" || value === "-p") {
+      const prompt = argv[index + 1];
+      if (!prompt || prompt.startsWith("-")) {
+        throw new Error(`Missing value for ${value}`);
+      }
+      args.prompt = prompt;
       index += 1;
       continue;
     }
@@ -137,6 +159,14 @@ export async function loadConfig(configPath, cliArgs = {}) {
 
   if (cliArgs.target) {
     config.target = cliArgs.target;
+  }
+
+  if (cliArgs.reviewer) {
+    config.reviewer = cliArgs.reviewer;
+  }
+
+  if (cliArgs.prompt) {
+    config.prompt = cliArgs.prompt;
   }
 
   if (!config.target) {
@@ -188,6 +218,8 @@ Usage:
 
 Options:
   --config, -c   Optional config json path. If omitted, ./config.json is loaded only when present
+  --reviewer, -r Override reviewer (codex | gemini | auto)
+  --prompt, -p   Override prompt
   --debug, -d    Print extra debug information to the console
   --help, -h     Show help
 
