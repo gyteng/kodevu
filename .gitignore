@@ -1,0 +1,8 @@
+node_modules/
+reports/
+data/
+.scratch/
+*.log
+config.json
+config.*.json
+!config.example.json

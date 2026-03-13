@@ -1,0 +1,101 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
+const defaultConfig = {
+  vcs: "auto",
+  target: "",
+  pollCron: "*/10 * * * *",
+  outputDir: "./reports",
+  commandTimeoutMs: 600000,
+  reviewPrompt:
+    "请严格审查当前变更，优先指出 bug、回归风险、兼容性问题、安全问题、边界条件缺陷和缺失测试。请使用简体中文输出 Markdown；如果没有明确缺陷，请写“未发现明确缺陷”，并补充剩余风险。",
+  bootstrapToLatest: true,
+  maxRevisionsPerRun: 20
+};
+
+export function parseCliArgs(argv) {
+  const args = {
+    configPath: "config.json",
+    once: false,
+    help: false
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const value = argv[index];
+
+    if (value === "--once") {
+      args.once = true;
+      continue;
+    }
+
+    if (value === "--help" || value === "-h") {
+      args.help = true;
+      continue;
+    }
+
+    if (value === "--config" || value === "-c") {
+      args.configPath = argv[index + 1];
+      index += 1;
+      continue;
+    }
+  }
+
+  return args;
+}
+
+export async function loadConfig(configPath) {
+  const absoluteConfigPath = path.resolve(configPath);
+  const raw = await fs.readFile(absoluteConfigPath, "utf8");
+  const config = {
+    ...defaultConfig,
+    ...JSON.parse(raw)
+  };
+
+  if (!config.target && config.svnTarget) {
+    config.target = config.svnTarget;
+  }
+
+  if (!config.target) {
+    throw new Error(`Missing required config field "target" (or legacy "svnTarget") in ${absoluteConfigPath}`);
+  }
+
+  config.vcs = String(config.vcs || "auto").toLowerCase();
+
+  if (!["auto", "svn", "git"].includes(config.vcs)) {
+    throw new Error(`"vcs" must be one of "auto", "svn", or "git" in ${absoluteConfigPath}`);
+  }
+
+  config.configPath = absoluteConfigPath;
+  config.baseDir = path.dirname(absoluteConfigPath);
+  config.outputDir = path.resolve(config.baseDir, config.outputDir);
+  config.stateFilePath = path.resolve(config.baseDir, "./data/state.json");
+  config.maxRevisionsPerRun = Number(config.maxRevisionsPerRun);
+  config.commandTimeoutMs = Number(config.commandTimeoutMs);
+
+  if (!Number.isInteger(config.maxRevisionsPerRun) || config.maxRevisionsPerRun <= 0) {
+    throw new Error(`"maxRevisionsPerRun" must be a positive integer in ${absoluteConfigPath}`);
+  }
+
+  if (!Number.isInteger(config.commandTimeoutMs) || config.commandTimeoutMs <= 0) {
+    throw new Error(`"commandTimeoutMs" must be a positive integer in ${absoluteConfigPath}`);
+  }
+
+  return config;
+}
+
+export function printHelp() {
+  console.log(`Kodevu
+
+Usage:
+  node src/index.js [--config config.json] [--once]
+
+Options:
+  --config, -c   Path to config json. Default: ./config.json
+  --once         Run one polling cycle and exit
+  --help, -h     Show help
+
+Config highlights:
+  vcs            auto | svn | git
+  target         Repository target path (Git) or SVN working copy / URL
+`);
+}

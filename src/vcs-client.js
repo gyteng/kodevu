@@ -1,0 +1,178 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import * as gitClient from "./git-client.js";
+import * as svnClient from "./svn-client.js";
+
+function isLikelyUrl(value) {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
+}
+
+async function pathExists(targetPath) {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function createSvnBackend() {
+  return {
+    kind: "svn",
+    displayName: "SVN",
+    changeName: "revision",
+    formatChangeId(revision) {
+      return `r${revision}`;
+    },
+    getReportFileName(revision) {
+      return `r${revision}.md`;
+    },
+    async getTargetInfo(config) {
+      return await svnClient.getTargetInfo(config);
+    },
+    async getLatestChangeId(config, targetInfo) {
+      return await svnClient.getLatestRevision(config, targetInfo);
+    },
+    async getPendingChangeIds(config, targetInfo, startExclusive, endInclusive, limit) {
+      return await svnClient.getPendingRevisions(config, targetInfo, startExclusive, endInclusive, limit);
+    },
+    async getChangeDiff(config, targetInfo, revision) {
+      return await svnClient.getRevisionDiff(config, revision);
+    },
+    async getChangeDetails(config, targetInfo, revision) {
+      const details = await svnClient.getRevisionDetails(config, targetInfo, revision);
+
+      return {
+        id: revision,
+        displayId: `r${details.revision}`,
+        author: details.author,
+        date: details.date,
+        message: details.message,
+        changedPaths: details.changedPaths
+      };
+    },
+    async isValidCheckpoint() {
+      return true;
+    },
+    toStateValue(revision) {
+      return Number(revision);
+    },
+    fromStateValue(state) {
+      if (Number.isInteger(state.lastReviewedId)) {
+        return state.lastReviewedId;
+      }
+
+      if (Number.isInteger(state.lastReviewedRevision)) {
+        return state.lastReviewedRevision;
+      }
+
+      return null;
+    },
+    extendState(state, revision) {
+      return {
+        ...state,
+        lastReviewedRevision: Number(revision)
+      };
+    }
+  };
+}
+
+function createGitBackend() {
+  return {
+    kind: "git",
+    displayName: "Git",
+    changeName: "commit",
+    formatChangeId(commitHash) {
+      return commitHash.slice(0, 12);
+    },
+    getReportFileName(commitHash) {
+      return `git-${commitHash}.md`;
+    },
+    async getTargetInfo(config) {
+      return await gitClient.getTargetInfo(config);
+    },
+    async getLatestChangeId(config, targetInfo) {
+      return await gitClient.getLatestCommit(config, targetInfo);
+    },
+    async getPendingChangeIds(config, targetInfo, startExclusive, endInclusive, limit) {
+      return await gitClient.getPendingCommits(config, targetInfo, startExclusive, endInclusive, limit);
+    },
+    async getChangeDiff(config, targetInfo, commitHash) {
+      return await gitClient.getCommitDiff(config, targetInfo, commitHash);
+    },
+    async getChangeDetails(config, targetInfo, commitHash) {
+      const details = await gitClient.getCommitDetails(config, targetInfo, commitHash);
+
+      return {
+        id: commitHash,
+        displayId: commitHash.slice(0, 12),
+        author: details.author,
+        date: details.date,
+        message: details.message,
+        changedPaths: details.changedPaths
+      };
+    },
+    async isValidCheckpoint(config, targetInfo, checkpointCommit, latestCommit) {
+      return await gitClient.isValidCheckpoint(config, targetInfo, checkpointCommit, latestCommit);
+    },
+    toStateValue(commitHash) {
+      return String(commitHash);
+    },
+    fromStateValue(state) {
+      if (typeof state.lastReviewedId === "string" && state.lastReviewedId) {
+        return state.lastReviewedId;
+      }
+
+      if (typeof state.lastReviewedCommit === "string" && state.lastReviewedCommit) {
+        return state.lastReviewedCommit;
+      }
+
+      return null;
+    },
+    extendState(state, commitHash) {
+      return {
+        ...state,
+        lastReviewedCommit: String(commitHash)
+      };
+    }
+  };
+}
+
+const backends = {
+  svn: createSvnBackend(),
+  git: createGitBackend()
+};
+
+export async function resolveRepositoryContext(config) {
+  if (config.vcs === "svn") {
+    return {
+      backend: backends.svn,
+      targetInfo: await backends.svn.getTargetInfo(config)
+    };
+  }
+
+  if (config.vcs === "git") {
+    return {
+      backend: backends.git,
+      targetInfo: await backends.git.getTargetInfo(config)
+    };
+  }
+
+  const candidateTargetPath = path.resolve(config.baseDir, config.target);
+
+  if (!isLikelyUrl(config.target) && (await pathExists(candidateTargetPath))) {
+    try {
+      return {
+        backend: backends.git,
+        targetInfo: await backends.git.getTargetInfo(config)
+      };
+    } catch {
+      // Fall through to SVN auto-detection.
+    }
+  }
+
+  return {
+    backend: backends.svn,
+    targetInfo: await backends.svn.getTargetInfo(config)
+  };
+}
