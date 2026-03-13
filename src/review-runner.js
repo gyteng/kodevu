@@ -4,6 +4,18 @@ import path from "node:path";
 import { runCommand } from "./shell.js";
 import { resolveRepositoryContext } from "./vcs-client.js";
 
+const DIFF_LIMITS = {
+  review: {
+    maxLines: 4000,
+    maxChars: 120000
+  },
+  report: {
+    maxLines: 1500,
+    maxChars: 40000
+  },
+  tailLines: 200
+};
+
 function debugLog(config, message) {
   if (config.debug) {
     console.error(`[debug] ${message}`);
@@ -167,7 +179,106 @@ function getReviewWorkspaceRoot(config, backend, targetInfo) {
   return config.baseDir;
 }
 
-function buildPrompt(config, backend, targetInfo, details) {
+function countLines(text) {
+  if (!text) {
+    return 0;
+  }
+
+  return text.split(/\r?\n/).length;
+}
+
+function trimBlockToChars(text, maxChars, keepTail = false) {
+  if (text.length <= maxChars) {
+    return text;
+  }
+
+  if (maxChars <= 3) {
+    return ".".repeat(Math.max(maxChars, 0));
+  }
+
+  return keepTail ? `...${text.slice(-(maxChars - 3))}` : `${text.slice(0, maxChars - 3)}...`;
+}
+
+function truncateDiffText(diffText, maxLines, maxChars, tailLines, purposeLabel) {
+  const normalizedDiff = diffText.replace(/\r\n/g, "\n");
+  const originalLineCount = countLines(normalizedDiff);
+  const originalCharCount = normalizedDiff.length;
+
+  if (originalLineCount <= maxLines && originalCharCount <= maxChars) {
+    return {
+      text: diffText,
+      wasTruncated: false,
+      originalLineCount,
+      originalCharCount,
+      outputLineCount: originalLineCount,
+      outputCharCount: originalCharCount
+    };
+  }
+
+  const lines = normalizedDiff.split("\n");
+  const safeTailLines = Math.min(Math.max(tailLines, 0), Math.max(maxLines - 2, 0));
+  const headLineCount = Math.max(maxLines - safeTailLines - 1, 1);
+  let headBlock = lines.slice(0, headLineCount).join("\n");
+  let tailBlock = safeTailLines > 0 ? lines.slice(-safeTailLines).join("\n") : "";
+  const omittedLineCount = Math.max(originalLineCount - headLineCount - safeTailLines, 0);
+  const markerBlock = [
+    `... diff truncated for ${purposeLabel} ...`,
+    `original lines: ${originalLineCount}, original chars: ${originalCharCount}`,
+    `omitted lines: ${omittedLineCount}`
+  ].join("\n");
+
+  let truncatedText = [headBlock, markerBlock, tailBlock].filter(Boolean).join("\n");
+
+  if (truncatedText.length > maxChars) {
+    const reservedChars = markerBlock.length + (tailBlock ? 2 : 1);
+    const remainingChars = Math.max(maxChars - reservedChars, 0);
+    const headBudget = tailBlock ? Math.floor(remainingChars * 0.7) : remainingChars;
+    const tailBudget = tailBlock ? Math.max(remainingChars - headBudget, 0) : 0;
+    headBlock = trimBlockToChars(headBlock, headBudget, false);
+    tailBlock = trimBlockToChars(tailBlock, tailBudget, true);
+    truncatedText = [headBlock, markerBlock, tailBlock].filter(Boolean).join("\n");
+  }
+
+  return {
+    text: truncatedText,
+    wasTruncated: true,
+    originalLineCount,
+    originalCharCount,
+    outputLineCount: countLines(truncatedText),
+    outputCharCount: truncatedText.length
+  };
+}
+
+function prepareDiffPayloads(config, diffText) {
+  return {
+    review: truncateDiffText(
+      diffText,
+      DIFF_LIMITS.review.maxLines,
+      DIFF_LIMITS.review.maxChars,
+      DIFF_LIMITS.tailLines,
+      "reviewer input"
+    ),
+    report: truncateDiffText(
+      diffText,
+      DIFF_LIMITS.report.maxLines,
+      DIFF_LIMITS.report.maxChars,
+      Math.min(DIFF_LIMITS.tailLines, DIFF_LIMITS.report.maxLines),
+      "report output"
+    )
+  };
+}
+
+function formatDiffHandling(diffPayload, label) {
+  return [
+    `- ${label} Original Lines: \`${diffPayload.originalLineCount}\``,
+    `- ${label} Original Chars: \`${diffPayload.originalCharCount}\``,
+    `- ${label} Included Lines: \`${diffPayload.outputLineCount}\``,
+    `- ${label} Included Chars: \`${diffPayload.outputCharCount}\``,
+    `- ${label} Truncated: \`${diffPayload.wasTruncated ? "yes" : "no"}\``
+  ].join("\n");
+}
+
+function buildPrompt(config, backend, targetInfo, details, reviewDiffPayload) {
   const fileList = details.changedPaths.map((item) => `${item.action} ${item.relativePath}`).join("\n");
   const workspaceRoot = getReviewWorkspaceRoot(config, backend, targetInfo);
   const canReadRelatedFiles = backend.kind === "git" || Boolean(targetInfo.workingCopyPath);
@@ -181,17 +292,19 @@ function buildPrompt(config, backend, targetInfo, details) {
       ? "Besides the diff below, you may read other related files in the workspace when needed to understand call sites, shared utilities, configuration, tests, or data flow. Do not modify files or rely on shell commands."
       : "Review primarily from the diff below. Do not assume access to other local files, shell commands, or repository history.",
     "Use plain text file references like path/to/file.js:123. Do not emit clickable workspace links.",
-    "Write the final review in Simplified Chinese.",
     `Repository Type: ${backend.displayName}`,
     `Change ID: ${details.displayId}`,
     `Author: ${details.author}`,
     `Date: ${details.date || "unknown"}`,
     `Changed files:\n${fileList || "(none)"}`,
-    `Commit message:\n${details.message || "(empty)"}`
+    `Commit message:\n${details.message || "(empty)"}`,
+    reviewDiffPayload.wasTruncated
+      ? `Diff delivery note: the diff was truncated before being sent to the reviewer to stay within configured size limits. Original diff size was ${reviewDiffPayload.originalLineCount} lines / ${reviewDiffPayload.originalCharCount} chars, and the included excerpt is ${reviewDiffPayload.outputLineCount} lines / ${reviewDiffPayload.outputCharCount} chars. Use the changed file list and inspect related workspace files when needed.`
+      : `Diff delivery note: the full diff is included. Size is ${reviewDiffPayload.originalLineCount} lines / ${reviewDiffPayload.originalCharCount} chars.`
   ].join("\n\n");
 }
 
-function buildReport(config, backend, targetInfo, details, diffText, reviewer, reviewerResult) {
+function buildReport(config, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult) {
   const lines = [
     `# ${backend.displayName} Review Report: ${details.displayId}`,
     "",
@@ -216,13 +329,18 @@ function buildReport(config, backend, targetInfo, details, diffText, reviewer, r
     "## Review Context",
     "",
     "```text",
-    buildPrompt(config, backend, targetInfo, details),
+    buildPrompt(config, backend, targetInfo, details, diffPayloads.review),
     "```",
+    "",
+    "## Diff Handling",
+    "",
+    formatDiffHandling(diffPayloads.review, "Reviewer Input"),
+    formatDiffHandling(diffPayloads.report, "Report Diff"),
     "",
     "## Diff",
     "",
     "```diff",
-    diffText.trim() || "(empty diff)",
+    diffPayloads.report.text.trim() || "(empty diff)",
     "```",
     "",
     `## ${reviewer.responseSectionTitle}`,
@@ -236,10 +354,12 @@ function buildReport(config, backend, targetInfo, details, diffText, reviewer, r
 async function runReviewerPrompt(config, backend, targetInfo, details, diffText) {
   const reviewer = REVIEWERS[config.reviewer];
   const reviewWorkspaceRoot = getReviewWorkspaceRoot(config, backend, targetInfo);
-  const promptText = buildPrompt(config, backend, targetInfo, details);
+  const diffPayloads = prepareDiffPayloads(config, diffText);
+  const promptText = buildPrompt(config, backend, targetInfo, details, diffPayloads.review);
   return {
     reviewer,
-    result: await reviewer.run(config, reviewWorkspaceRoot, promptText, diffText)
+    diffPayloads,
+    result: await reviewer.run(config, reviewWorkspaceRoot, promptText, diffPayloads.review.text)
   };
 }
 
@@ -282,8 +402,14 @@ async function reviewChange(config, backend, targetInfo, changeId) {
   }
 
   const diffText = await backend.getChangeDiff(config, targetInfo, changeId);
-  const { reviewer, result: reviewerResult } = await runReviewerPrompt(config, backend, targetInfo, details, diffText);
-  const report = buildReport(config, backend, targetInfo, details, diffText, reviewer, reviewerResult);
+  const { reviewer, diffPayloads, result: reviewerResult } = await runReviewerPrompt(
+    config,
+    backend,
+    targetInfo,
+    details,
+    diffText
+  );
+  const report = buildReport(config, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult);
   const outputFile = path.join(config.outputDir, backend.getReportFileName(changeId));
   await writeTextFile(outputFile, report);
 
@@ -326,7 +452,7 @@ export async function runReviewCycle(config) {
 
   let changeIdsToReview = [];
 
-  if (!lastReviewedId && config.bootstrapToLatest) {
+  if (!lastReviewedId) {
     changeIdsToReview = [latestChangeId];
     console.log(`Initialized state to review the latest ${backend.changeName} ${backend.formatChangeId(latestChangeId)} first.`);
   } else {

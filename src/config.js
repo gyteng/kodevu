@@ -12,7 +12,6 @@ const defaultConfig = {
   commandTimeoutMs: 600000,
   reviewPrompt:
     "请严格审查当前变更，优先指出 bug、回归风险、兼容性问题、安全问题、边界条件缺陷和缺失测试。请使用简体中文输出 Markdown；如果没有明确缺陷，请写“未发现明确缺陷”，并补充剩余风险。",
-  bootstrapToLatest: true,
   maxRevisionsPerRun: 20
 };
 

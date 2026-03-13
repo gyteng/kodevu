@@ -70,15 +70,12 @@ npx kodevu --config ./config.current.json --once
 - `reviewPrompt`: saved into the report as review context
 - `outputDir`: report output directory; default `./reports`
 - `commandTimeoutMs`: timeout for a single review command execution in milliseconds
-- `bootstrapToLatest`: if no state exists, start by reviewing only the current latest change instead of replaying the full history
 - `maxRevisionsPerRun`: cap the number of pending changes per polling cycle
 
 Internal defaults:
 
-- review state is always stored in `./data/state.json`
-- the tool always invokes `git`, `svn`, and the configured reviewer CLI from `PATH`
-- command output is decoded as `utf8`
-- debug logging is enabled only by passing `--debug` or `-d`
+- review state is always stored in `./data/state.json`, and first run starts from the current latest change instead of replaying full history
+- Kodevu invokes `git`, `svn`, and the configured reviewer CLI from `PATH`; debug logging is enabled only by passing `--debug` or `-d`
 
 ## Target Rules
 
@@ -91,6 +88,7 @@ Internal defaults:
 
 - `reviewer: "codex"` uses `codex exec` with the diff embedded in the prompt.
 - `reviewer: "gemini"` uses `gemini -p` in non-interactive mode.
+- Large diffs are truncated before being sent to the reviewer or written into the report once they exceed the configured line or character limits.
 - For Git targets and local SVN working copies, the reviewer command runs from the repository workspace so it can inspect related files beyond the diff when needed.
 - For remote SVN URLs without a local working copy, the review still relies on the diff and change metadata only.
 - SVN reports keep the `r123.md` naming style.
