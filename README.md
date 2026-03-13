@@ -4,7 +4,7 @@ A Node.js tool that polls new SVN revisions or Git commits, fetches each change 
 
 ## Workflow
 
-1. Detect the configured repository type, or use the explicit `vcs` setting.
+1. Detect the repository type automatically (Git or SVN).
 2. Read the latest change from `target`.
 3. Find changes that have not been reviewed yet.
 4. For each change:
@@ -64,7 +64,6 @@ npx kodevu --config ./config.current.json --once
 ## Config
 
 - `target`: required repository target
-- `vcs`: `auto`, `svn`, or `git`; default `auto`
 - `reviewer`: `codex` or `gemini`; default `codex`
 - `pollCron`: cron schedule, default every 10 minutes
 - `reviewPrompt`: saved into the report as review context
@@ -81,7 +80,7 @@ Internal defaults:
 
 - For SVN, `target` can be a working copy path or repository URL.
 - For Git, `target` must be a local repository path or a subdirectory inside a local repository.
-- When `vcs` is `auto`, the tool tries Git first for existing local paths, then falls back to SVN.
+- The tool tries Git first for existing local paths, then falls back to SVN.
 - Legacy `svnTarget` is still accepted for backward compatibility.
 
 ## Notes

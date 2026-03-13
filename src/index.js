@@ -36,7 +36,6 @@ if (config.debug) {
   console.error(
     `[debug] Loaded config: ${JSON.stringify({
       configPath: config.configPath,
-      vcs: config.vcs,
       reviewer: config.reviewer,
       target: config.target,
       pollCron: config.pollCron,

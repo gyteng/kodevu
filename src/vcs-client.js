@@ -144,20 +144,6 @@ const backends = {
 };
 
 export async function resolveRepositoryContext(config) {
-  if (config.vcs === "svn") {
-    return {
-      backend: backends.svn,
-      targetInfo: await backends.svn.getTargetInfo(config)
-    };
-  }
-
-  if (config.vcs === "git") {
-    return {
-      backend: backends.git,
-      targetInfo: await backends.git.getTargetInfo(config)
-    };
-  }
-
   const candidateTargetPath = path.resolve(config.baseDir, config.target);
 
   if (!isLikelyUrl(config.target) && (await pathExists(candidateTargetPath))) {

@@ -4,7 +4,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const defaultConfig = {
-  vcs: "auto",
   reviewer: "codex",
   target: "",
   pollCron: "*/10 * * * *",
@@ -80,13 +79,8 @@ export async function loadConfig(configPath, cliArgs = {}) {
     throw new Error(`Missing required config field "target" (or legacy "svnTarget") in ${absoluteConfigPath}`);
   }
 
-  config.vcs = String(config.vcs || "auto").toLowerCase();
   config.reviewer = String(config.reviewer || "codex").toLowerCase();
   config.debug = Boolean(cliArgs.debug);
-
-  if (!["auto", "svn", "git"].includes(config.vcs)) {
-    throw new Error(`"vcs" must be one of "auto", "svn", or "git" in ${absoluteConfigPath}`);
-  }
 
   if (!["codex", "gemini"].includes(config.reviewer)) {
     throw new Error(`"reviewer" must be one of "codex" or "gemini" in ${absoluteConfigPath}`);
@@ -126,7 +120,6 @@ Options:
   --help, -h     Show help
 
 Config highlights:
-  vcs            auto | svn | git
   reviewer       codex | gemini
   target         Repository target path (Git) or SVN working copy / URL
 `);
