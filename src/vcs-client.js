@@ -67,21 +67,8 @@ function createSvnBackend() {
       return Number(revision);
     },
     fromStateValue(state) {
-      if (Number.isInteger(state.lastReviewedId)) {
-        return state.lastReviewedId;
-      }
-
-      if (Number.isInteger(state.lastReviewedRevision)) {
-        return state.lastReviewedRevision;
-      }
-
-      return null;
-    },
-    extendState(state, revision) {
-      return {
-        ...state,
-        lastReviewedRevision: Number(revision)
-      };
+      const id = state.lastReviewedId;
+      return Number.isInteger(id) ? id : null;
     }
   };
 }
@@ -137,21 +124,8 @@ function createGitBackend() {
       return String(commitHash);
     },
     fromStateValue(state) {
-      if (typeof state.lastReviewedId === "string" && state.lastReviewedId) {
-        return state.lastReviewedId;
-      }
-
-      if (typeof state.lastReviewedCommit === "string" && state.lastReviewedCommit) {
-        return state.lastReviewedCommit;
-      }
-
-      return null;
-    },
-    extendState(state, commitHash) {
-      return {
-        ...state,
-        lastReviewedCommit: String(commitHash)
-      };
+      const id = state.lastReviewedId;
+      return typeof id === "string" && id ? id : null;
     }
   };
 }

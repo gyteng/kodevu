@@ -414,26 +414,14 @@ async function runReviewerPrompt(config, backend, targetInfo, details, diffText)
 }
 
 function readLastReviewedId(state, backend, targetInfo) {
-  if (state.vcs && state.vcs !== backend.kind) {
-    return null;
-  }
-
-  if (state.targetKey && state.targetKey !== targetInfo.stateKey) {
-    return null;
-  }
-
   return backend.fromStateValue(state);
 }
 
 function buildStateSnapshot(backend, targetInfo, changeId) {
-  const state = {
-    vcs: backend.kind,
-    targetKey: targetInfo.stateKey,
+  return {
     lastReviewedId: backend.toStateValue(changeId),
     updatedAt: new Date().toISOString()
   };
-
-  return backend.extendState(state, changeId);
 }
 
 async function reviewChange(config, backend, targetInfo, changeId) {
