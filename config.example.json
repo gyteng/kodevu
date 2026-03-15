@@ -5,5 +5,8 @@
   "outputDir": "~/.kodevu",
   "stateFilePath": "~/.kodevu/state.json",
   "commandTimeoutMs": 600000,
-  "maxRevisionsPerRun": 5
+  "maxRevisionsPerRun": 5,
+  "outputFormats": [
+    "markdown"
+  ]
 }

@@ -1,6 +1,6 @@
 # Kodevu
 
-A Node.js tool that polls new SVN revisions or Git commits, fetches each change diff directly from the repository, sends the diff to a supported reviewer CLI, and writes the result to Markdown files.
+A Node.js tool that polls new SVN revisions or Git commits, fetches each change diff directly from the repository, sends the diff to a supported reviewer CLI, and writes review results to report files.
 
 ## Workflow
 
@@ -12,7 +12,7 @@ A Node.js tool that polls new SVN revisions or Git commits, fetches each change 
    - generate a unified diff for that single revision or commit
    - send the diff and change metadata to the configured reviewer CLI
    - allow the reviewer to inspect related local repository files in read-only mode when a local workspace is available
-   - write the result to `~/.kodevu/`
+   - write the result to `~/.kodevu/` (Markdown by default; optional JSON via config)
 5. Update `~/.kodevu/state.json` so the same change is not reviewed twice.
 
 ## Quick start
@@ -22,7 +22,7 @@ npx kodevu /path/to/your/repo
 ```
 
 No config file is required for the default flow.
-Review reports are written to `~/.kodevu/`, and review state is stored at `~/.kodevu/state.json`.
+Review reports are written to `~/.kodevu/` as Markdown (`.md`) by default, and review state is stored at `~/.kodevu/state.json`.
 
 If you want a config file, run `npx kodevu init` to create `./config.json` in the current directory.
 
@@ -79,6 +79,7 @@ npx kodevu /path/to/your/repo --config ./config.current.json
 - `reviewer`: `codex`, `gemini`, or `auto`; default `auto`
 - `prompt`: saved into the report as review context
 - `outputDir`: report output directory; default `~/.kodevu`
+- `outputFormats`: report formats to generate; supports `markdown` and `json`; default `["markdown"]`
 - `stateFilePath`: review state file path; default `~/.kodevu/state.json`
 - `commandTimeoutMs`: timeout for a single review command execution in milliseconds
 - `maxRevisionsPerRun`: cap the number of pending changes per polling cycle
@@ -103,7 +104,8 @@ Internal defaults:
 - Large diffs are truncated before being sent to the reviewer or written into the report once they exceed the configured line or character limits.
 - For Git targets and local SVN working copies, the reviewer command runs from the repository workspace so it can inspect related files beyond the diff when needed.
 - For remote SVN URLs without a local working copy, the review still relies on the diff and change metadata only.
-- SVN reports are written as `<YYYYMMDD-HHmmss>-svn-r<revision>.md`.
-- Git reports are written as `<YYYYMMDD-HHmmss>-git-<short-commit-hash>.md`.
+- By default, SVN reports are written as `<YYYYMMDD-HHmmss>-svn-r<revision>.md`.
+- By default, Git reports are written as `<YYYYMMDD-HHmmss>-git-<short-commit-hash>.md`.
+- If `outputFormats` includes `json`, matching `.json` files are generated alongside Markdown reports.
 - `~/.kodevu/state.json` stores per-project checkpoints keyed by repository identity; only the v2 multi-project structure is supported.
 - If the reviewer command exits non-zero or times out, the report is still written, but the state is not advanced so the change can be retried later.

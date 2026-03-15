@@ -16,7 +16,8 @@ const defaultConfig = {
   commandTimeoutMs: 600000,
   prompt:
     "请严格审查当前变更，优先指出 bug、回归风险、兼容性问题、安全问题、边界条件缺陷和缺失测试。请使用简体中文输出 Markdown；如果没有明确缺陷，请写“未发现明确缺陷”，并补充剩余风险。",
-  maxRevisionsPerRun: 20
+  maxRevisionsPerRun: 20,
+  outputFormats: ["markdown"]
 };
 
 function resolveConfigPath(baseDir, value) {
@@ -37,6 +38,29 @@ function resolveConfigPath(baseDir, value) {
   }
 
   return path.isAbsolute(value) ? value : path.resolve(baseDir, value);
+}
+
+
+function normalizeOutputFormats(outputFormats, loadedConfigPath) {
+  const source = outputFormats == null ? ["markdown"] : outputFormats;
+  const values = Array.isArray(source) ? source : [source];
+  const normalized = [...new Set(values.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean))];
+  const supported = ["markdown", "json"];
+  const invalid = normalized.filter((item) => !supported.includes(item));
+
+  if (invalid.length > 0) {
+    throw new Error(
+      `"outputFormats" contains unsupported value(s): ${invalid.join(", ")}. Use any of: ${supported.join(", ")}${
+        loadedConfigPath ? ` in ${loadedConfigPath}` : ""
+      }`
+    );
+  }
+
+  if (normalized.length === 0) {
+    throw new Error(`"outputFormats" must include at least one format${loadedConfigPath ? ` in ${loadedConfigPath}` : ""}`);
+  }
+
+  return normalized;
 }
 
 async function resolveAutoReviewers(debug, loadedConfigPath) {
@@ -200,6 +224,7 @@ export async function loadConfig(configPath, cliArgs = {}) {
   config.stateFilePath = resolveConfigPath(config.baseDir, config.stateFilePath);
   config.maxRevisionsPerRun = Number(config.maxRevisionsPerRun);
   config.commandTimeoutMs = Number(config.commandTimeoutMs);
+  config.outputFormats = normalizeOutputFormats(config.outputFormats, loadedConfigPath);
 
   if (!Number.isInteger(config.maxRevisionsPerRun) || config.maxRevisionsPerRun <= 0) {
     throw new Error(`"maxRevisionsPerRun" must be a positive integer${loadedConfigPath ? ` in ${loadedConfigPath}` : ""}`);
@@ -233,6 +258,7 @@ Options:
 Config highlights:
   reviewer       codex | gemini | auto
   target         Repository target path (Git) or SVN working copy / URL; CLI positional target overrides config
+  outputFormats  ["markdown"] by default; set to include "json" when needed
 `);
 }
 
