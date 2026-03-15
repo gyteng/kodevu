@@ -154,6 +154,15 @@ async function writeTextFile(filePath, contents) {
   await fs.writeFile(filePath, contents, "utf8");
 }
 
+async function writeJsonFile(filePath, payload) {
+  await ensureDir(path.dirname(filePath));
+  await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+}
+
+function shouldWriteFormat(config, format) {
+  return Array.isArray(config.outputFormats) && config.outputFormats.includes(format);
+}
+
 function formatChangedPaths(changedPaths) {
   if (changedPaths.length === 0) {
     return "_No changed files captured._";
@@ -351,6 +360,47 @@ function buildReport(config, backend, targetInfo, details, diffPayloads, reviewe
   return `${lines.join("\n")}\n`;
 }
 
+function buildJsonReport(config, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult) {
+  return {
+    repositoryType: backend.displayName,
+    target: targetInfo.targetDisplay || config.target,
+    changeId: details.displayId,
+    author: details.author,
+    commitDate: details.date || "unknown",
+    generatedAt: new Date().toISOString(),
+    reviewer: {
+      name: reviewer.displayName,
+      exitCode: reviewerResult.code,
+      timedOut: Boolean(reviewerResult.timedOut)
+    },
+    changedFiles: details.changedPaths.map((item) => ({
+      action: item.action,
+      path: item.relativePath,
+      previousPath: item.previousPath || null
+    })),
+    commitMessage: details.message || "",
+    reviewContext: buildPrompt(config, backend, targetInfo, details, diffPayloads.review),
+    diffHandling: {
+      reviewerInput: {
+        originalLines: diffPayloads.review.originalLineCount,
+        originalChars: diffPayloads.review.originalCharCount,
+        includedLines: diffPayloads.review.outputLineCount,
+        includedChars: diffPayloads.review.outputCharCount,
+        truncated: diffPayloads.review.wasTruncated
+      },
+      reportDiff: {
+        originalLines: diffPayloads.report.originalLineCount,
+        originalChars: diffPayloads.report.originalCharCount,
+        includedLines: diffPayloads.report.outputLineCount,
+        includedChars: diffPayloads.report.outputCharCount,
+        truncated: diffPayloads.report.wasTruncated
+      }
+    },
+    diff: diffPayloads.report.text.trim(),
+    reviewerResponse: reviewerResult.message?.trim() ? reviewerResult.message.trim() : reviewer.emptyResponseText
+  };
+}
+
 async function runReviewerPrompt(config, backend, targetInfo, details, diffText) {
   const reviewer = REVIEWERS[config.reviewer];
   const reviewWorkspaceRoot = getReviewWorkspaceRoot(config, backend, targetInfo);
@@ -396,9 +446,29 @@ async function reviewChange(config, backend, targetInfo, changeId) {
       "No file changes were captured for this change under the configured target."
     ].join("\n");
 
-    const outputFile = path.join(config.outputDir, backend.getReportFileName(changeId));
-    await writeTextFile(outputFile, `${skippedReport}\n`);
-    return { success: true, outputFile };
+    const markdownReportFile = path.join(config.outputDir, backend.getReportFileName(changeId));
+    const jsonReportFile = markdownReportFile.replace(/\.md$/i, ".json");
+
+    if (shouldWriteFormat(config, "markdown")) {
+      await writeTextFile(markdownReportFile, `${skippedReport}\n`);
+    }
+
+    if (shouldWriteFormat(config, "json")) {
+      await writeJsonFile(jsonReportFile, {
+        repositoryType: backend.displayName,
+        target: targetInfo.targetDisplay || config.target,
+        changeId: details.displayId,
+        generatedAt: new Date().toISOString(),
+        skipped: true,
+        message: "No file changes were captured for this change under the configured target."
+      });
+    }
+
+    return {
+      success: true,
+      outputFile: shouldWriteFormat(config, "markdown") ? markdownReportFile : null,
+      jsonOutputFile: shouldWriteFormat(config, "json") ? jsonReportFile : null
+    };
   }
 
   const diffText = await backend.getChangeDiff(config, targetInfo, changeId);
@@ -435,13 +505,33 @@ async function reviewChange(config, backend, targetInfo, changeId) {
 
   const report = buildReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult);
   const outputFile = path.join(config.outputDir, backend.getReportFileName(changeId));
-  await writeTextFile(outputFile, report);
+  const jsonOutputFile = outputFile.replace(/\.md$/i, ".json");
 
-  if (reviewerResult.code !== 0 || reviewerResult.timedOut) {
-    throw new Error(`${reviewer.displayName} failed for ${details.displayId}; report written to ${outputFile}`);
+  if (shouldWriteFormat(config, "markdown")) {
+    await writeTextFile(outputFile, report);
   }
 
-  return { success: true, outputFile, details };
+  if (shouldWriteFormat(config, "json")) {
+    await writeJsonFile(
+      jsonOutputFile,
+      buildJsonReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult)
+    );
+  }
+
+  if (reviewerResult.code !== 0 || reviewerResult.timedOut) {
+    throw new Error(
+      `${reviewer.displayName} failed for ${details.displayId}; report written to ${outputFile}${
+        shouldWriteFormat(config, "json") ? ` and ${jsonOutputFile}` : ""
+      }`
+    );
+  }
+
+  return {
+    success: true,
+    outputFile: shouldWriteFormat(config, "markdown") ? outputFile : null,
+    jsonOutputFile: shouldWriteFormat(config, "json") ? jsonOutputFile : null,
+    details
+  };
 }
 
 function formatChangeList(backend, changeIds) {
@@ -502,7 +592,11 @@ export async function runReviewCycle(config) {
   for (const changeId of changeIdsToReview) {
     debugLog(config, `Starting review for ${backend.formatChangeId(changeId)}.`);
     const result = await reviewChange(config, backend, targetInfo, changeId);
-    console.log(`Reviewed ${backend.formatChangeId(changeId)}: ${result.outputFile}`);
+    const outputLabels = [
+      result.outputFile ? `md: ${result.outputFile}` : null,
+      result.jsonOutputFile ? `json: ${result.jsonOutputFile}` : null
+    ].filter(Boolean);
+    console.log(`Reviewed ${backend.formatChangeId(changeId)}: ${outputLabels.join(" | ") || "(no report file generated)"}`);
     const nextProjectState = buildStateSnapshot(backend, targetInfo, changeId);
     await saveState(config.stateFilePath, updateProjectState(stateFile, targetInfo, nextProjectState));
     stateFile.projects[targetInfo.stateKey] = nextProjectState;

@@ -2,7 +2,7 @@
   "name": "kodevu",
   "version": "0.1.10",
   "type": "module",
-  "description": "Poll SVN revisions or Git commits, send each change diff to a reviewer CLI, and write Markdown review reports.",
+  "description": "Poll SVN revisions or Git commits, send each change diff to a reviewer CLI, and write configurable review reports.",
   "bin": {
     "kodevu": "./src/index.js"
   },
