@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { ProgressDisplay } from "./progress-ui.js";
 import { runCommand } from "./shell.js";
 import { resolveRepositoryContext } from "./vcs-client.js";
 
@@ -424,10 +425,12 @@ function buildStateSnapshot(backend, targetInfo, changeId) {
   };
 }
 
-async function reviewChange(config, backend, targetInfo, changeId) {
+async function reviewChange(config, backend, targetInfo, changeId, progress) {
+  progress?.update(0.05, "loading change details");
   const details = await backend.getChangeDetails(config, targetInfo, changeId);
 
   if (details.changedPaths.length === 0) {
+    progress?.update(0.7, "writing skipped report");
     const skippedReport = [
       `# ${backend.displayName} Review Report: ${details.displayId}`,
       "",
@@ -459,6 +462,7 @@ async function reviewChange(config, backend, targetInfo, changeId) {
     };
   }
 
+  progress?.update(0.2, "loading diff");
   const diffText = await backend.getChangeDiff(config, targetInfo, changeId);
   const reviewersToTry = [config.reviewer, ...(config.fallbackReviewers || [])];
 
@@ -470,6 +474,7 @@ async function reviewChange(config, backend, targetInfo, changeId) {
   for (const reviewerName of reviewersToTry) {
     currentReviewerConfig = { ...config, reviewer: reviewerName };
     debugLog(config, `Trying reviewer: ${reviewerName}`);
+    progress?.update(0.45, `running reviewer ${reviewerName}`);
 
     const res = await runReviewerPrompt(
       currentReviewerConfig,
@@ -487,10 +492,11 @@ async function reviewChange(config, backend, targetInfo, changeId) {
     }
 
     if (reviewerName !== reviewersToTry[reviewersToTry.length - 1]) {
-      console.log(`${reviewer.displayName} failed for ${details.displayId}; trying next reviewer...`);
+      progress?.log(`${reviewer.displayName} failed for ${details.displayId}; trying next reviewer...`);
     }
   }
 
+  progress?.update(0.82, "writing report");
   const report = buildReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult);
   const outputFile = path.join(config.outputDir, backend.getReportFileName(changeId));
   const jsonOutputFile = outputFile.replace(/\.md$/i, ".json");
@@ -524,6 +530,15 @@ async function reviewChange(config, backend, targetInfo, changeId) {
 
 function formatChangeList(backend, changeIds) {
   return changeIds.map((changeId) => backend.formatChangeId(changeId)).join(", ");
+}
+
+function updateOverallProgress(progress, completedCount, totalCount, currentFraction, stage) {
+  if (!progress || totalCount <= 0) {
+    return;
+  }
+
+  const overallFraction = (completedCount + currentFraction) / totalCount;
+  progress.update(overallFraction, `${completedCount}/${totalCount} completed${stage ? ` | ${stage}` : ""}`);
 }
 
 export async function runReviewCycle(config) {
@@ -576,20 +591,51 @@ export async function runReviewCycle(config) {
   }
 
   console.log(`Reviewing ${backend.displayName} ${backend.changeName}s ${formatChangeList(backend, changeIdsToReview)}`);
+  const progressDisplay = new ProgressDisplay();
+  const overallProgress = progressDisplay.createItem(
+    `${backend.displayName} ${backend.changeName} batch`,
+    { barWidth: 30 }
+  );
+  overallProgress.start("0/" + changeIdsToReview.length + " completed");
 
-  for (const changeId of changeIdsToReview) {
+  for (const [index, changeId] of changeIdsToReview.entries()) {
     debugLog(config, `Starting review for ${backend.formatChangeId(changeId)}.`);
-    const result = await reviewChange(config, backend, targetInfo, changeId);
+    const displayId = backend.formatChangeId(changeId);
+    const progress = progressDisplay.createItem(
+      `${backend.displayName} ${backend.changeName} ${displayId} (${index + 1}/${changeIdsToReview.length})`
+    );
+    progress.start("queued");
+    updateOverallProgress(overallProgress, index, changeIdsToReview.length, 0, `starting ${displayId}`);
+
+    const syncOverallProgress = (fraction, stage) => {
+      progress.update(fraction, stage);
+      updateOverallProgress(overallProgress, index, changeIdsToReview.length, fraction, `${displayId} | ${stage}`);
+    };
+
+    let result;
+
+    try {
+      result = await reviewChange(config, backend, targetInfo, changeId, { update: syncOverallProgress, log: (message) => progress.log(message) });
+      syncOverallProgress(0.94, "saving checkpoint");
+    } catch (error) {
+      progress.fail(`failed at ${displayId}`);
+      overallProgress.fail(`failed at ${displayId} (${index}/${changeIdsToReview.length} completed)`);
+      throw error;
+    }
+
     const outputLabels = [
       result.outputFile ? `md: ${result.outputFile}` : null,
       result.jsonOutputFile ? `json: ${result.jsonOutputFile}` : null
     ].filter(Boolean);
-    console.log(`Reviewed ${backend.formatChangeId(changeId)}: ${outputLabels.join(" | ") || "(no report file generated)"}`);
     const nextProjectState = buildStateSnapshot(backend, targetInfo, changeId);
     await saveState(config.stateFilePath, updateProjectState(stateFile, targetInfo, nextProjectState));
     stateFile.projects[targetInfo.stateKey] = nextProjectState;
     debugLog(config, `Saved checkpoint for ${backend.formatChangeId(changeId)} to ${config.stateFilePath}.`);
+    progress.succeed(`reviewed ${displayId}: ${outputLabels.join(" | ") || "(no report file generated)"}`);
+    updateOverallProgress(overallProgress, index + 1, changeIdsToReview.length, 0, `finished ${displayId}`);
   }
+
+  overallProgress.succeed(`completed ${changeIdsToReview.length}/${changeIdsToReview.length}`);
 
   const remainingChanges = await backend.getPendingChangeIds(
     config,
