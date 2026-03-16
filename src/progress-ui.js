@@ -2,6 +2,7 @@ import readline from "node:readline";
 
 const SPINNER_FRAMES = ["|", "/", "-", "\\"];
 const DEFAULT_BAR_WIDTH = 24;
+const MIN_BAR_WIDTH = 8;
 
 function clampProgress(value) {
   if (!Number.isFinite(value)) {
@@ -24,6 +25,22 @@ function buildBar(progress, width) {
   }
 
   return `[${"=".repeat(Math.max(filled - 1, 0))}>${" ".repeat(width - filled)}]`;
+}
+
+function truncateLine(line, maxWidth) {
+  if (!Number.isFinite(maxWidth) || maxWidth <= 0) {
+    return "";
+  }
+
+  if (line.length <= maxWidth) {
+    return line;
+  }
+
+  if (maxWidth <= 3) {
+    return ".".repeat(maxWidth);
+  }
+
+  return `${line.slice(0, maxWidth - 3)}...`;
 }
 
 class ProgressItem {
@@ -81,18 +98,27 @@ class ProgressItem {
     this.progress = clampProgress(progress);
     this.active = false;
     this.display.stopIfIdle();
-    this.display.writeStaticLine(
-      `${prefix} ${this.label} ${buildBar(this.progress, this.barWidth)} ${Math.round(this.progress * 100)
-        .toString()
-        .padStart(3, " ")}% ${message}`
-    );
+    this.display.writeStaticLine(this.buildLine(prefix, message));
   }
 
   renderLine(frameIndex) {
     const spinner = SPINNER_FRAMES[frameIndex];
-    const bar = buildBar(this.progress, this.barWidth);
+    return this.buildLine(spinner, this.stage);
+  }
+
+  buildLine(prefix, suffix) {
+    const availableWidth = this.display.getAvailableWidth();
     const pct = `${Math.round(this.progress * 100)}`.padStart(3, " ");
-    return `${spinner} ${this.label} ${bar} ${pct}% ${this.stage}`;
+    const reservedWidth = prefix.length + this.label.length + pct.length + 6;
+    const dynamicBarWidth = Math.min(
+      this.barWidth,
+      Math.max(MIN_BAR_WIDTH, availableWidth - reservedWidth - (suffix ? suffix.length + 1 : 0))
+    );
+    const bar = buildBar(this.progress, dynamicBarWidth);
+    return truncateLine(
+      `${prefix} ${this.label} ${bar} ${pct}%${suffix ? ` ${suffix}` : ""}`,
+      availableWidth
+    );
   }
 
   writeFallback(line) {
@@ -113,6 +139,7 @@ export class ProgressDisplay {
     this.timer = null;
     this.items = [];
     this.renderedLineCount = 0;
+    this.handleResize = this.handleResize.bind(this);
   }
 
   createItem(label, options = {}) {
@@ -125,6 +152,8 @@ export class ProgressDisplay {
     if (!this.enabled || this.timer) {
       return;
     }
+
+    this.attachResizeHandler();
 
     this.timer = setInterval(() => {
       this.frameIndex = (this.frameIndex + 1) % SPINNER_FRAMES.length;
@@ -150,7 +179,7 @@ export class ProgressDisplay {
     }
 
     this.clearRender();
-    this.stream.write(`${message}\n`);
+    this.stream.write(`${truncateLine(message, this.getAvailableWidth())}\n`);
     this.render();
   }
 
@@ -202,5 +231,38 @@ export class ProgressDisplay {
       clearInterval(this.timer);
       this.timer = null;
     }
+
+    this.detachResizeHandler();
+  }
+
+  getAvailableWidth() {
+    const columns = this.stream.columns || 80;
+    return Math.max(columns - 1, 20);
+  }
+
+  handleResize() {
+    if (!this.enabled) {
+      return;
+    }
+
+    this.render();
+  }
+
+  attachResizeHandler() {
+    if (typeof this.stream.on !== "function" || this.resizeAttached) {
+      return;
+    }
+
+    this.stream.on("resize", this.handleResize);
+    this.resizeAttached = true;
+  }
+
+  detachResizeHandler() {
+    if (typeof this.stream.off !== "function" || !this.resizeAttached) {
+      return;
+    }
+
+    this.stream.off("resize", this.handleResize);
+    this.resizeAttached = false;
   }
 }
