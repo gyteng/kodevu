@@ -592,24 +592,16 @@ export async function runReviewCycle(config) {
 
   console.log(`Reviewing ${backend.displayName} ${backend.changeName}s ${formatChangeList(backend, changeIdsToReview)}`);
   const progressDisplay = new ProgressDisplay();
-  const overallProgress = progressDisplay.createItem(
-    `${backend.displayName} ${backend.changeName} batch`,
-    { barWidth: 30 }
-  );
-  overallProgress.start("0/" + changeIdsToReview.length + " completed");
+  const progress = progressDisplay.createItem(`${backend.displayName} ${backend.changeName} batch`);
+  progress.start("0/" + changeIdsToReview.length + " completed");
 
   for (const [index, changeId] of changeIdsToReview.entries()) {
     debugLog(config, `Starting review for ${backend.formatChangeId(changeId)}.`);
     const displayId = backend.formatChangeId(changeId);
-    const progress = progressDisplay.createItem(
-      `${backend.displayName} ${backend.changeName} ${displayId} (${index + 1}/${changeIdsToReview.length})`
-    );
-    progress.start("queued");
-    updateOverallProgress(overallProgress, index, changeIdsToReview.length, 0, `starting ${displayId}`);
+    updateOverallProgress(progress, index, changeIdsToReview.length, 0, `starting ${displayId}`);
 
     const syncOverallProgress = (fraction, stage) => {
-      progress.update(fraction, stage);
-      updateOverallProgress(overallProgress, index, changeIdsToReview.length, fraction, `${displayId} | ${stage}`);
+      updateOverallProgress(progress, index, changeIdsToReview.length, fraction, `${displayId} | ${stage}`);
     };
 
     let result;
@@ -618,8 +610,7 @@ export async function runReviewCycle(config) {
       result = await reviewChange(config, backend, targetInfo, changeId, { update: syncOverallProgress, log: (message) => progress.log(message) });
       syncOverallProgress(0.94, "saving checkpoint");
     } catch (error) {
-      progress.fail(`failed at ${displayId}`);
-      overallProgress.fail(`failed at ${displayId} (${index}/${changeIdsToReview.length} completed)`);
+      progress.fail(`failed at ${displayId} (${index}/${changeIdsToReview.length} completed)`);
       throw error;
     }
 
@@ -631,11 +622,11 @@ export async function runReviewCycle(config) {
     await saveState(config.stateFilePath, updateProjectState(stateFile, targetInfo, nextProjectState));
     stateFile.projects[targetInfo.stateKey] = nextProjectState;
     debugLog(config, `Saved checkpoint for ${backend.formatChangeId(changeId)} to ${config.stateFilePath}.`);
-    progress.succeed(`reviewed ${displayId}: ${outputLabels.join(" | ") || "(no report file generated)"}`);
-    updateOverallProgress(overallProgress, index + 1, changeIdsToReview.length, 0, `finished ${displayId}`);
+    progress.log(`[done] reviewed ${displayId}: ${outputLabels.join(" | ") || "(no report file generated)"}`);
+    updateOverallProgress(progress, index + 1, changeIdsToReview.length, 0, `finished ${displayId}`);
   }
 
-  overallProgress.succeed(`completed ${changeIdsToReview.length}/${changeIdsToReview.length}`);
+  progress.succeed(`completed ${changeIdsToReview.length}/${changeIdsToReview.length}`);
 
   const remainingChanges = await backend.getPendingChangeIds(
     config,

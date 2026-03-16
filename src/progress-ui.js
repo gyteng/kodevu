@@ -1,7 +1,6 @@
 import readline from "node:readline";
 
 const SPINNER_FRAMES = ["|", "/", "-", "\\"];
-const DEFAULT_BAR_WIDTH = 24;
 
 function clampProgress(value) {
   if (!Number.isFinite(value)) {
@@ -9,21 +8,6 @@ function clampProgress(value) {
   }
 
   return Math.max(0, Math.min(1, value));
-}
-
-function buildBar(progress, width) {
-  const safeProgress = clampProgress(progress);
-  const filled = Math.max(Math.round(safeProgress * width), safeProgress > 0 ? 1 : 0);
-
-  if (filled >= width) {
-    return `[${"=".repeat(width)}]`;
-  }
-
-  if (filled === 0) {
-    return `[${" ".repeat(width)}]`;
-  }
-
-  return `[${"=".repeat(Math.max(filled - 1, 0))}>${" ".repeat(width - filled)}]`;
 }
 
 function truncateLine(line, maxWidth) {
@@ -43,10 +27,9 @@ function truncateLine(line, maxWidth) {
 }
 
 class ProgressItem {
-  constructor(display, label, options = {}) {
+  constructor(display, label) {
     this.display = display;
     this.label = label;
-    this.barWidth = options.barWidth || DEFAULT_BAR_WIDTH;
     this.progress = 0;
     this.stage = "";
     this.active = false;
@@ -54,8 +37,8 @@ class ProgressItem {
   }
 
   start(stage = "starting") {
-    this.stage = stage;
     this.active = true;
+    this.stage = stage;
 
     if (!this.display.enabled) {
       this.writeFallback(`... ${this.label}: ${stage}`);
@@ -63,7 +46,7 @@ class ProgressItem {
     }
 
     this.display.start();
-    this.display.render();
+    this.display.activate(this);
   }
 
   update(progress, stage) {
@@ -78,7 +61,7 @@ class ProgressItem {
       return;
     }
 
-    this.display.render();
+    this.display.activate(this);
   }
 
   log(message) {
@@ -96,46 +79,23 @@ class ProgressItem {
   finish(prefix, progress, message) {
     this.progress = clampProgress(progress);
     this.active = false;
-    this.display.stopIfIdle();
-    this.display.writeStaticLine(this.buildLine(prefix, message));
+    this.display.deactivate(this);
+    this.display.writeStaticLine(this.buildFinalLine(prefix, message));
   }
 
   renderLine(frameIndex) {
-    const spinner = SPINNER_FRAMES[frameIndex];
-    return this.buildLine(spinner, this.stage);
+    return this.buildStatusLine(SPINNER_FRAMES[frameIndex], this.stage);
   }
 
-  buildLine(prefix, suffix) {
+  buildFinalLine(prefix, message) {
+    return this.buildStatusLine(prefix, message);
+  }
+
+  buildStatusLine(prefix, suffix) {
     const availableWidth = this.display.getAvailableWidth();
     const pct = `${Math.round(this.progress * 100)}`.padStart(3, " ");
-    const parts = [prefix, this.label];
-    const suffixText = suffix ? ` ${suffix}` : "";
-
-    if (availableWidth < 10) {
-      return truncateLine(`${prefix} ${pct}%`, availableWidth);
-    }
-
-    const fullReservedWidth = prefix.length + this.label.length + pct.length + suffixText.length + 4;
-    const fullBarWidth = availableWidth - fullReservedWidth;
-
-    if (fullBarWidth >= 4) {
-      return truncateLine(
-        `${parts.join(" ")} ${buildBar(this.progress, Math.min(this.barWidth, fullBarWidth))} ${pct}%${suffixText}`,
-        availableWidth
-      );
-    }
-
-    const compactReservedWidth = prefix.length + pct.length + suffixText.length + 4;
-    const compactBarWidth = availableWidth - compactReservedWidth;
-
-    if (compactBarWidth >= 4) {
-      return truncateLine(
-        `${prefix} ${buildBar(this.progress, compactBarWidth)} ${pct}%${suffixText}`,
-        availableWidth
-      );
-    }
-
-    return truncateLine(`${prefix} ${pct}%${suffixText}`, availableWidth);
+    const suffixText = suffix ? ` | ${suffix}` : "";
+    return truncateLine(`${prefix} ${pct}% ${this.label}${suffixText}`, availableWidth);
   }
 
   writeFallback(line) {
@@ -155,12 +115,14 @@ export class ProgressDisplay {
     this.frameIndex = 0;
     this.timer = null;
     this.items = [];
-    this.renderedLineCount = 0;
+    this.currentItem = null;
+    this.statusVisible = false;
+    this.resizeAttached = false;
     this.handleResize = this.handleResize.bind(this);
   }
 
-  createItem(label, options = {}) {
-    const item = new ProgressItem(this, label, options);
+  createItem(label) {
+    const item = new ProgressItem(this, label);
     this.items.push(item);
     return item;
   }
@@ -171,11 +133,28 @@ export class ProgressDisplay {
     }
 
     this.attachResizeHandler();
-
     this.timer = setInterval(() => {
       this.frameIndex = (this.frameIndex + 1) % SPINNER_FRAMES.length;
       this.render();
     }, 120);
+  }
+
+  activate(item) {
+    this.currentItem = item;
+    this.render();
+  }
+
+  deactivate(item) {
+    if (this.currentItem === item) {
+      this.currentItem = this.items.findLast((candidate) => candidate.active) || null;
+    }
+
+    this.stopIfIdle();
+    this.clearStatusLine();
+
+    if (this.currentItem) {
+      this.render();
+    }
   }
 
   log(message) {
@@ -184,8 +163,8 @@ export class ProgressDisplay {
       return;
     }
 
-    this.clearRender();
-    this.stream.write(`${message}\n`);
+    this.clearStatusLine();
+    this.stream.write(`${truncateLine(message, this.getAvailableWidth())}\n`);
     this.render();
   }
 
@@ -195,48 +174,29 @@ export class ProgressDisplay {
       return;
     }
 
-    this.clearRender();
+    this.clearStatusLine();
     this.stream.write(`${truncateLine(message, this.getAvailableWidth())}\n`);
     this.render();
   }
 
   render() {
-    if (!this.enabled) {
+    if (!this.enabled || !this.currentItem?.active) {
       return;
     }
 
-    const activeItems = this.items.filter((item) => item.active);
-    this.clearRender();
-
-    if (activeItems.length === 0) {
-      this.renderedLineCount = 0;
-      return;
-    }
-
-    const lines = activeItems.map((item) => item.renderLine(this.frameIndex));
-    this.stream.write(lines.join("\n"));
-    this.renderedLineCount = lines.length;
+    this.clearStatusLine();
+    this.stream.write(this.currentItem.renderLine(this.frameIndex));
+    this.statusVisible = true;
   }
 
-  clearRender() {
-    if (!this.enabled || this.renderedLineCount === 0) {
+  clearStatusLine() {
+    if (!this.enabled || !this.statusVisible) {
       return;
     }
 
-    readline.moveCursor(this.stream, 0, -Math.max(this.renderedLineCount - 1, 0));
-
-    for (let index = 0; index < this.renderedLineCount; index += 1) {
-      readline.clearLine(this.stream, 0);
-      readline.cursorTo(this.stream, 0);
-
-      if (index < this.renderedLineCount - 1) {
-        readline.moveCursor(this.stream, 0, 1);
-      }
-    }
-
-    readline.moveCursor(this.stream, 0, -Math.max(this.renderedLineCount - 1, 0));
+    readline.clearLine(this.stream, 0);
     readline.cursorTo(this.stream, 0);
-    this.renderedLineCount = 0;
+    this.statusVisible = false;
   }
 
   stopIfIdle() {
