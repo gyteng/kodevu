@@ -32,7 +32,7 @@ If you want a config file, run `npx kodevu init` to create `./config.json` in th
 npx kodevu init
 ```
 
-This creates `config.json` in the current directory from the packaged `config.example.json`.
+This creates `config.json` in the current directory from built-in defaults.
 You only need this when you want to override defaults such as `reviewer` or output paths.
 
 If you want a different path:

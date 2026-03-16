@@ -1,6 +1,6 @@
 {
   "name": "kodevu",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "type": "module",
   "description": "Poll SVN revisions or Git commits, send each change diff to a reviewer CLI, and write configurable review reports.",
   "bin": {
@@ -8,8 +8,7 @@
   },
   "files": [
     "src",
-    "README.md",
-    "config.example.json"
+    "README.md"
   ],
   "scripts": {
     "start": "node src/index.js",

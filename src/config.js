@@ -1,8 +1,6 @@
 import fs from "node:fs/promises";
-import { constants as fsConstants } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { findCommandOnPath } from "./shell.js";
 
 const defaultStorageDir = path.join(os.homedir(), ".kodevu");
@@ -16,8 +14,19 @@ const defaultConfig = {
   commandTimeoutMs: 600000,
   prompt:
     "请严格审查当前变更，优先指出 bug、回归风险、兼容性问题、安全问题、边界条件缺陷和缺失测试。请使用简体中文输出 Markdown；如果没有明确缺陷，请写“未发现明确缺陷”，并补充剩余风险。",
-  maxRevisionsPerRun: 20,
+  maxRevisionsPerRun: 5,
   outputFormats: ["markdown"]
+};
+
+const configTemplate = {
+  target: "C:/path/to/your/repository-or-subdirectory",
+  reviewer: defaultConfig.reviewer,
+  prompt: defaultConfig.prompt,
+  outputDir: "~/.kodevu",
+  stateFilePath: "~/.kodevu/state.json",
+  commandTimeoutMs: defaultConfig.commandTimeoutMs,
+  maxRevisionsPerRun: defaultConfig.maxRevisionsPerRun,
+  outputFormats: defaultConfig.outputFormats
 };
 
 function resolveConfigPath(baseDir, value) {
@@ -264,12 +273,12 @@ Config highlights:
 
 export async function initConfig(targetPath = "config.json") {
   const absoluteTargetPath = path.resolve(targetPath);
-  const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-  const templatePath = path.join(packageRoot, "config.example.json");
 
   await fs.mkdir(path.dirname(absoluteTargetPath), { recursive: true });
+
+  const content = JSON.stringify(configTemplate, null, 2) + "\n";
   try {
-    await fs.copyFile(templatePath, absoluteTargetPath, fsConstants.COPYFILE_EXCL);
+    await fs.writeFile(absoluteTargetPath, content, { flag: "wx" });
   } catch (error) {
     if (error?.code === "EEXIST") {
       throw new Error(`Config file already exists: ${absoluteTargetPath}`);
