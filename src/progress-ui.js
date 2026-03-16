@@ -2,6 +2,7 @@ import readline from "node:readline";
 
 const SPINNER_FRAMES = ["|", "/", "-", "\\"];
 const ELLIPSIS = "...";
+const MIN_DYNAMIC_WIDTH = 60;
 
 function clampProgress(value) {
   if (!Number.isFinite(value)) {
@@ -97,7 +98,7 @@ class ProgressItem {
     this.active = true;
     this.stage = stage;
 
-    if (!this.display.enabled) {
+    if (!this.display.canRenderDynamically()) {
       this.writeFallback(`... ${this.label}: ${stage}`);
       return;
     }
@@ -113,11 +114,12 @@ class ProgressItem {
       this.stage = stage;
     }
 
-    if (!this.display.enabled) {
+    if (!this.display.canRenderDynamically()) {
       this.writeFallback(`... ${this.label}: ${this.stage}`);
       return;
     }
 
+    this.display.start();
     this.display.activate(this);
   }
 
@@ -216,7 +218,7 @@ export class ProgressDisplay {
   }
 
   log(message) {
-    if (!this.enabled) {
+    if (!this.canRenderDynamically()) {
       this.stream.write(`${message}\n`);
       return;
     }
@@ -227,7 +229,7 @@ export class ProgressDisplay {
   }
 
   writeStaticLine(message) {
-    if (!this.enabled) {
+    if (!this.canRenderDynamically()) {
       this.stream.write(`${message}\n`);
       return;
     }
@@ -238,7 +240,8 @@ export class ProgressDisplay {
   }
 
   render() {
-    if (!this.enabled || !this.currentItem?.active) {
+    if (!this.canRenderDynamically() || !this.currentItem?.active) {
+      this.clearStatusLine();
       return;
     }
 
@@ -289,6 +292,10 @@ export class ProgressDisplay {
   getAvailableWidth() {
     const columns = this.stream.columns || 80;
     return Math.max(columns - 1, 1);
+  }
+
+  canRenderDynamically() {
+    return this.enabled && this.getAvailableWidth() >= MIN_DYNAMIC_WIDTH;
   }
 
   handleResize() {
