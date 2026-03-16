@@ -2,7 +2,6 @@ import readline from "node:readline";
 
 const SPINNER_FRAMES = ["|", "/", "-", "\\"];
 const DEFAULT_BAR_WIDTH = 24;
-const MIN_BAR_WIDTH = 8;
 
 function clampProgress(value) {
   if (!Number.isFinite(value)) {
@@ -109,16 +108,34 @@ class ProgressItem {
   buildLine(prefix, suffix) {
     const availableWidth = this.display.getAvailableWidth();
     const pct = `${Math.round(this.progress * 100)}`.padStart(3, " ");
-    const reservedWidth = prefix.length + this.label.length + pct.length + 6;
-    const dynamicBarWidth = Math.min(
-      this.barWidth,
-      Math.max(MIN_BAR_WIDTH, availableWidth - reservedWidth - (suffix ? suffix.length + 1 : 0))
-    );
-    const bar = buildBar(this.progress, dynamicBarWidth);
-    return truncateLine(
-      `${prefix} ${this.label} ${bar} ${pct}%${suffix ? ` ${suffix}` : ""}`,
-      availableWidth
-    );
+    const parts = [prefix, this.label];
+    const suffixText = suffix ? ` ${suffix}` : "";
+
+    if (availableWidth < 10) {
+      return truncateLine(`${prefix} ${pct}%`, availableWidth);
+    }
+
+    const fullReservedWidth = prefix.length + this.label.length + pct.length + suffixText.length + 4;
+    const fullBarWidth = availableWidth - fullReservedWidth;
+
+    if (fullBarWidth >= 4) {
+      return truncateLine(
+        `${parts.join(" ")} ${buildBar(this.progress, Math.min(this.barWidth, fullBarWidth))} ${pct}%${suffixText}`,
+        availableWidth
+      );
+    }
+
+    const compactReservedWidth = prefix.length + pct.length + suffixText.length + 4;
+    const compactBarWidth = availableWidth - compactReservedWidth;
+
+    if (compactBarWidth >= 4) {
+      return truncateLine(
+        `${prefix} ${buildBar(this.progress, compactBarWidth)} ${pct}%${suffixText}`,
+        availableWidth
+      );
+    }
+
+    return truncateLine(`${prefix} ${pct}%${suffixText}`, availableWidth);
   }
 
   writeFallback(line) {
@@ -237,7 +254,7 @@ export class ProgressDisplay {
 
   getAvailableWidth() {
     const columns = this.stream.columns || 80;
-    return Math.max(columns - 1, 20);
+    return Math.max(columns - 1, 1);
   }
 
   handleResize() {
