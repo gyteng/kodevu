@@ -83,8 +83,40 @@ function parseCodexTokenUsage(stderr) {
   return { inputTokens, outputTokens, totalTokens };
 }
 
+function parseCopilotTokenUsage(stderr) {
+  if (!stderr) {
+    return null;
+  }
+
+  const patterns = [
+    /input[_ ]tokens?\s*[:=]\s*(\d+)/i,
+    /output[_ ]tokens?\s*[:=]\s*(\d+)/i,
+    /total[_ ]tokens?\s*[:=]\s*(\d+)/i
+  ];
+
+  const inputMatch = stderr.match(patterns[0]);
+  const outputMatch = stderr.match(patterns[1]);
+  const totalMatch = stderr.match(patterns[2]);
+
+  if (!inputMatch && !outputMatch && !totalMatch) {
+    return null;
+  }
+
+  const inputTokens = inputMatch ? Number(inputMatch[1]) : 0;
+  const outputTokens = outputMatch ? Number(outputMatch[1]) : 0;
+  const totalTokens = totalMatch ? Number(totalMatch[1]) : inputTokens + outputTokens;
+
+  return { inputTokens, outputTokens, totalTokens };
+}
+
+const TOKEN_PARSERS = {
+  gemini: parseGeminiTokenUsage,
+  codex: parseCodexTokenUsage,
+  copilot: parseCopilotTokenUsage
+};
+
 function resolveTokenUsage(reviewerName, stderr, promptText, diffText, responseText) {
-  const parseFn = reviewerName === "gemini" ? parseGeminiTokenUsage : parseCodexTokenUsage;
+  const parseFn = TOKEN_PARSERS[reviewerName] || parseCopilotTokenUsage;
   const parsed = parseFn(stderr);
 
   if (parsed && parsed.totalTokens > 0) {
@@ -154,6 +186,25 @@ const REVIEWERS = {
     emptyResponseText: "_No final response returned from gemini._",
     async run(config, workingDir, promptText, diffText) {
       const execResult = await runCommand("gemini", ["-p", promptText], {
+        cwd: workingDir,
+        input: ["Unified diff:", diffText].join("\n\n"),
+        allowFailure: true,
+        timeoutMs: config.commandTimeoutMs,
+        debug: config.debug
+      });
+
+      return {
+        ...execResult,
+        message: execResult.stdout
+      };
+    }
+  },
+  copilot: {
+    displayName: "Copilot",
+    responseSectionTitle: "Copilot Response",
+    emptyResponseText: "_No final response returned from copilot._",
+    async run(config, workingDir, promptText, diffText) {
+      const execResult = await runCommand("copilot", ["-p", promptText], {
         cwd: workingDir,
         input: ["Unified diff:", diffText].join("\n\n"),
         allowFailure: true,

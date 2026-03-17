@@ -4,7 +4,7 @@ import path from "node:path";
 import { findCommandOnPath } from "./shell.js";
 
 const defaultStorageDir = path.join(os.homedir(), ".kodevu");
-const SUPPORTED_REVIEWERS = ["codex", "gemini"];
+const SUPPORTED_REVIEWERS = ["codex", "gemini", "copilot"];
 
 const defaultConfig = {
   reviewer: "auto",
@@ -223,7 +223,7 @@ export async function loadConfig(configPath, cliArgs = {}) {
     config.reviewerWasAutoSelected = true;
   } else if (!SUPPORTED_REVIEWERS.includes(config.reviewer)) {
     throw new Error(
-      `"reviewer" must be one of "codex", "gemini", or "auto"${loadedConfigPath ? ` in ${loadedConfigPath}` : ""}`
+      `"reviewer" must be one of "codex", "gemini", "copilot", or "auto"${loadedConfigPath ? ` in ${loadedConfigPath}` : ""}`
     );
   }
 
@@ -259,13 +259,13 @@ Usage:
 
 Options:
   --config, -c   Optional config json path. If omitted, ./config.json is loaded only when present
-  --reviewer, -r Override reviewer (codex | gemini | auto)
+  --reviewer, -r Override reviewer (codex | gemini | copilot | auto)
   --prompt, -p   Override prompt
   --debug, -d    Print extra debug information to the console
   --help, -h     Show help
 
 Config highlights:
-  reviewer       codex | gemini | auto
+  reviewer       codex | gemini | copilot | auto
   target         Repository target path (Git) or SVN working copy / URL; CLI positional target overrides config
   outputFormats  ["markdown"] by default; set to include "json" when needed
 `);
