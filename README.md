@@ -111,3 +111,7 @@ Internal defaults:
 - `~/.kodevu/state.json` stores per-project checkpoints keyed by repository identity; only the v2 multi-project structure is supported.
 - If the reviewer command exits non-zero or times out, the report is still written, but the state is not advanced so the change can be retried later.
 - Each report includes a `Token Usage` section recording token consumption for the review task. When the reviewer CLI outputs token statistics (via stderr), those are used directly (`source: "reviewer"`). Otherwise tokens are estimated at ~4 characters per token (`source: "estimate"`). The JSON report contains a `tokenUsage` object with `inputTokens`, `outputTokens`, `totalTokens`, and `source`.
+
+## License
+
+MIT
