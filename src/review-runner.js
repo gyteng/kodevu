@@ -23,6 +23,85 @@ function debugLog(config, message) {
   }
 }
 
+function estimateTokenCount(text) {
+  if (!text) {
+    return 0;
+  }
+
+  return Math.ceil(text.length / 4);
+}
+
+function parseGeminiTokenUsage(stderr) {
+  if (!stderr) {
+    return null;
+  }
+
+  const patterns = [
+    /input[_ ]tokens?\s*[:=]\s*(\d+)/i,
+    /output[_ ]tokens?\s*[:=]\s*(\d+)/i,
+    /total[_ ]tokens?\s*[:=]\s*(\d+)/i
+  ];
+
+  const inputMatch = stderr.match(patterns[0]);
+  const outputMatch = stderr.match(patterns[1]);
+  const totalMatch = stderr.match(patterns[2]);
+
+  if (!inputMatch && !outputMatch && !totalMatch) {
+    return null;
+  }
+
+  const inputTokens = inputMatch ? Number(inputMatch[1]) : 0;
+  const outputTokens = outputMatch ? Number(outputMatch[1]) : 0;
+  const totalTokens = totalMatch ? Number(totalMatch[1]) : inputTokens + outputTokens;
+
+  return { inputTokens, outputTokens, totalTokens };
+}
+
+function parseCodexTokenUsage(stderr) {
+  if (!stderr) {
+    return null;
+  }
+
+  const patterns = [
+    /input[_ ]tokens?\s*[:=]\s*(\d+)/i,
+    /output[_ ]tokens?\s*[:=]\s*(\d+)/i,
+    /total[_ ]tokens?\s*[:=]\s*(\d+)/i
+  ];
+
+  const inputMatch = stderr.match(patterns[0]);
+  const outputMatch = stderr.match(patterns[1]);
+  const totalMatch = stderr.match(patterns[2]);
+
+  if (!inputMatch && !outputMatch && !totalMatch) {
+    return null;
+  }
+
+  const inputTokens = inputMatch ? Number(inputMatch[1]) : 0;
+  const outputTokens = outputMatch ? Number(outputMatch[1]) : 0;
+  const totalTokens = totalMatch ? Number(totalMatch[1]) : inputTokens + outputTokens;
+
+  return { inputTokens, outputTokens, totalTokens };
+}
+
+function resolveTokenUsage(reviewerName, stderr, promptText, diffText, responseText) {
+  const parseFn = reviewerName === "gemini" ? parseGeminiTokenUsage : parseCodexTokenUsage;
+  const parsed = parseFn(stderr);
+
+  if (parsed && parsed.totalTokens > 0) {
+    return { ...parsed, source: "reviewer" };
+  }
+
+  const inputTokens = estimateTokenCount((promptText || "") + (diffText || ""));
+  const outputTokens = estimateTokenCount(responseText || "");
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    source: "estimate"
+  };
+}
+
 const REVIEWERS = {
   codex: {
     displayName: "Codex",
@@ -314,7 +393,17 @@ function buildPrompt(config, backend, targetInfo, details, reviewDiffPayload) {
   ].join("\n\n");
 }
 
-function buildReport(config, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult) {
+function formatTokenUsage(tokenUsage) {
+  const sourceLabel = tokenUsage.source === "reviewer" ? "reviewer reported" : "estimated (~4 chars/token)";
+  return [
+    `- Input Tokens: \`${tokenUsage.inputTokens}\``,
+    `- Output Tokens: \`${tokenUsage.outputTokens}\``,
+    `- Total Tokens: \`${tokenUsage.totalTokens}\``,
+    `- Token Source: \`${sourceLabel}\``
+  ].join("\n");
+}
+
+function buildReport(config, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage) {
   const lines = [
     `# ${backend.displayName} Review Report: ${details.displayId}`,
     "",
@@ -327,6 +416,10 @@ function buildReport(config, backend, targetInfo, details, diffPayloads, reviewe
     `- Reviewer: \`${reviewer.displayName}\``,
     `- Reviewer Exit Code: \`${reviewerResult.code}\``,
     `- Reviewer Timed Out: \`${reviewerResult.timedOut ? "yes" : "no"}\``,
+    "",
+    "## Token Usage",
+    "",
+    formatTokenUsage(tokenUsage),
     "",
     "## Changed Files",
     "",
@@ -361,7 +454,7 @@ function buildReport(config, backend, targetInfo, details, diffPayloads, reviewe
   return `${lines.join("\n")}\n`;
 }
 
-function buildJsonReport(config, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult) {
+function buildJsonReport(config, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage) {
   return {
     repositoryType: backend.displayName,
     target: targetInfo.targetDisplay || config.target,
@@ -373,6 +466,12 @@ function buildJsonReport(config, backend, targetInfo, details, diffPayloads, rev
       name: reviewer.displayName,
       exitCode: reviewerResult.code,
       timedOut: Boolean(reviewerResult.timedOut)
+    },
+    tokenUsage: {
+      inputTokens: tokenUsage.inputTokens,
+      outputTokens: tokenUsage.outputTokens,
+      totalTokens: tokenUsage.totalTokens,
+      source: tokenUsage.source
     },
     changedFiles: details.changedPaths.map((item) => ({
       action: item.action,
@@ -407,10 +506,20 @@ async function runReviewerPrompt(config, backend, targetInfo, details, diffText)
   const reviewWorkspaceRoot = getReviewWorkspaceRoot(config, backend, targetInfo);
   const diffPayloads = prepareDiffPayloads(config, diffText);
   const promptText = buildPrompt(config, backend, targetInfo, details, diffPayloads.review);
+  const result = await reviewer.run(config, reviewWorkspaceRoot, promptText, diffPayloads.review.text);
+  const tokenUsage = resolveTokenUsage(
+    config.reviewer,
+    result.stderr,
+    promptText,
+    diffPayloads.review.text,
+    result.message
+  );
+
   return {
     reviewer,
     diffPayloads,
-    result: await reviewer.run(config, reviewWorkspaceRoot, promptText, diffPayloads.review.text)
+    result,
+    tokenUsage
   };
 }
 
@@ -469,6 +578,7 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
   let reviewer;
   let diffPayloads;
   let reviewerResult;
+  let tokenUsage;
   let currentReviewerConfig;
 
   for (const reviewerName of reviewersToTry) {
@@ -486,6 +596,7 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
     reviewer = res.reviewer;
     diffPayloads = res.diffPayloads;
     reviewerResult = res.result;
+    tokenUsage = res.tokenUsage;
 
     if (reviewerResult.code === 0 && !reviewerResult.timedOut) {
       break;
@@ -497,7 +608,8 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
   }
 
   progress?.update(0.82, "writing report");
-  const report = buildReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult);
+  debugLog(config, `Token usage: input=${tokenUsage.inputTokens} output=${tokenUsage.outputTokens} total=${tokenUsage.totalTokens} source=${tokenUsage.source}`);
+  const report = buildReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage);
   const outputFile = path.join(config.outputDir, backend.getReportFileName(changeId));
   const jsonOutputFile = outputFile.replace(/\.md$/i, ".json");
 
@@ -508,7 +620,7 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
   if (shouldWriteFormat(config, "json")) {
     await writeJsonFile(
       jsonOutputFile,
-      buildJsonReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult)
+      buildJsonReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage)
     );
   }
 
