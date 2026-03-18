@@ -79,4 +79,8 @@ export class ProgressDisplay {
   writeLine(message) {
     this.stream.write(`${message}\n`);
   }
+
+  log(message) {
+    this.writeLine(message);
+  }
 }
