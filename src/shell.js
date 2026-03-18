@@ -1,11 +1,7 @@
 import spawn from "cross-spawn";
 import iconv from "iconv-lite";
+import { logger } from "./logger.js";
 
-function debugLog(enabled, message) {
-  if (enabled) {
-    console.error(`[debug] ${message}`);
-  }
-}
 
 function summarizeOutput(text) {
   if (!text) {
@@ -28,8 +24,7 @@ export async function runCommand(command, args = [], options = {}) {
     debug = false
   } = options;
 
-  debugLog(
-    debug,
+  logger.debug(
     `run: ${command} ${args.join(" ")}${cwd ? ` | cwd=${cwd}` : ""}${timeoutMs > 0 ? ` | timeoutMs=${timeoutMs}` : ""}`
   );
 
@@ -72,8 +67,7 @@ export async function runCommand(command, args = [], options = {}) {
         stderr: trim ? stderr.trim() : stderr
       };
 
-      debugLog(
-        debug,
+      logger.debug(
         `exit: ${command} code=${result.code} timedOut=${result.timedOut} stdout=${summarizeOutput(result.stdout)} stderr=${summarizeOutput(result.stderr)}`
       );
 

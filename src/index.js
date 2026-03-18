@@ -2,6 +2,7 @@
 
 import { initConfig, loadConfig, parseCliArgs, printHelp } from "./config.js";
 import { runReviewCycle } from "./review-runner.js";
+import { logger } from "./logger.js";
 
 let cliArgs;
 
@@ -29,32 +30,36 @@ if (cliArgs.command === "init") {
   }
 }
 
-const config = await loadConfig(cliArgs.configPath, cliArgs);
-
-if (config.reviewerWasAutoSelected) {
-  console.log(
-    `Reviewer "auto" selected ${config.reviewer}${config.reviewerCommandPath ? ` (${config.reviewerCommandPath})` : ""}.`
-  );
-}
-
-if (config.debug) {
-  console.error(
-    `[debug] Loaded config: ${JSON.stringify({
-      configPath: config.configPath,
-      reviewer: config.reviewer,
-      reviewerCommandPath: config.reviewerCommandPath,
-      reviewerWasAutoSelected: config.reviewerWasAutoSelected,
-      target: config.target,
-      outputDir: config.outputDir,
-      debug: config.debug
-    })}`
-  );
-}
-
 try {
+  const config = await loadConfig(cliArgs.configPath, cliArgs);
+  logger.init(config);
+
+  if (config.reviewerWasAutoSelected) {
+    logger.info(
+      `Reviewer "auto" selected ${config.reviewer}${config.reviewerCommandPath ? ` (${config.reviewerCommandPath})` : ""}.`
+    );
+  }
+
+  if (config.debug) {
+    logger.debug(
+      `Loaded config: ${JSON.stringify({
+        configPath: config.configPath,
+        reviewer: config.reviewer,
+        reviewerCommandPath: config.reviewerCommandPath,
+        reviewerWasAutoSelected: config.reviewerWasAutoSelected,
+        target: config.target,
+        outputDir: config.outputDir,
+        debug: config.debug
+      })}`
+    );
+  }
+
+  logger.info(`Session started. Target: ${config.target}`);
   await runReviewCycle(config);
+  logger.info("Session completed successfully.");
 } catch (error) {
-  console.error(error?.stack || String(error));
+  // If config was loaded, logger might be initialized, otherwise it will fall back to stderr
+  logger.error("Session failed with error", error);
   process.exitCode = 1;
 }
 process.exit(process.exitCode || 0);

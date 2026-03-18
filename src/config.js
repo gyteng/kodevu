@@ -11,6 +11,7 @@ const defaultConfig = {
   target: "",
   outputDir: defaultStorageDir,
   stateFilePath: path.join(defaultStorageDir, "state.json"),
+  logsDir: path.join(defaultStorageDir, "logs"),
   commandTimeoutMs: 600000,
   prompt:
     "请严格审查当前变更，优先指出 bug、回归风险、兼容性问题、安全问题、边界条件缺陷和缺失测试。请使用简体中文输出 Markdown；如果没有明确缺陷，请写“未发现明确缺陷”，并补充剩余风险。",
@@ -24,6 +25,7 @@ const configTemplate = {
   prompt: defaultConfig.prompt,
   outputDir: "~/.kodevu",
   stateFilePath: "~/.kodevu/state.json",
+  logsDir: "~/.kodevu/logs",
   commandTimeoutMs: defaultConfig.commandTimeoutMs,
   maxRevisionsPerRun: defaultConfig.maxRevisionsPerRun,
   outputFormats: defaultConfig.outputFormats
@@ -231,6 +233,7 @@ export async function loadConfig(configPath, cliArgs = {}) {
   config.baseDir = baseDir;
   config.outputDir = resolveConfigPath(config.baseDir, config.outputDir);
   config.stateFilePath = resolveConfigPath(config.baseDir, config.stateFilePath);
+  config.logsDir = resolveConfigPath(config.baseDir, config.logsDir);
   config.maxRevisionsPerRun = Number(config.maxRevisionsPerRun);
   config.commandTimeoutMs = Number(config.commandTimeoutMs);
   config.outputFormats = normalizeOutputFormats(config.outputFormats, loadedConfigPath);

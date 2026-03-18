@@ -4,6 +4,7 @@ import path from "node:path";
 import { ProgressDisplay } from "./progress-ui.js";
 import { runCommand } from "./shell.js";
 import { resolveRepositoryContext } from "./vcs-client.js";
+import { logger } from "./logger.js";
 
 const DIFF_LIMITS = {
   review: {
@@ -17,11 +18,6 @@ const DIFF_LIMITS = {
   tailLines: 200
 };
 
-function debugLog(config, message) {
-  if (config.debug) {
-    console.error(`[debug] ${message}`);
-  }
-}
 
 function estimateTokenCount(text) {
   if (!text) {
@@ -634,7 +630,7 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
 
   for (const reviewerName of reviewersToTry) {
     currentReviewerConfig = { ...config, reviewer: reviewerName };
-    debugLog(config, `Trying reviewer: ${reviewerName}`);
+    logger.debug(`Trying reviewer: ${reviewerName}`);
     progress?.update(0.45, `running reviewer ${reviewerName}`);
 
     const res = await runReviewerPrompt(
@@ -659,7 +655,7 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
   }
 
   progress?.update(0.82, "writing report");
-  debugLog(config, `Token usage: input=${tokenUsage.inputTokens} output=${tokenUsage.outputTokens} total=${tokenUsage.totalTokens} source=${tokenUsage.source}`);
+  logger.debug(`Token usage: input=${tokenUsage.inputTokens} output=${tokenUsage.outputTokens} total=${tokenUsage.totalTokens} source=${tokenUsage.source}`);
   const report = buildReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage);
   const outputFile = path.join(config.outputDir, backend.getReportFileName(changeId));
   const jsonOutputFile = outputFile.replace(/\.md$/i, ".json");
@@ -708,16 +704,14 @@ export async function runReviewCycle(config) {
   await ensureDir(config.outputDir);
 
   const { backend, targetInfo } = await resolveRepositoryContext(config);
-  debugLog(
-    config,
+  logger.debug(
     `Resolved repository context: backend=${backend.kind} target=${targetInfo.targetDisplay || config.target} stateKey=${targetInfo.stateKey}`
   );
   const latestChangeId = await backend.getLatestChangeId(config, targetInfo);
   const stateFile = await loadState(config.stateFilePath);
   const projectState = getProjectState(stateFile, targetInfo);
   let lastReviewedId = readLastReviewedId(projectState, backend, targetInfo);
-  debugLog(
-    config,
+  logger.debug(
     `Checkpoint status: latest=${backend.formatChangeId(latestChangeId)} lastReviewed=${lastReviewedId ? backend.formatChangeId(lastReviewedId) : "(none)"}`
   );
 
@@ -725,7 +719,7 @@ export async function runReviewCycle(config) {
     const checkpointIsValid = await backend.isValidCheckpoint(config, targetInfo, lastReviewedId, latestChangeId);
 
     if (!checkpointIsValid) {
-      console.log("Saved review state no longer matches repository history. Resetting checkpoint.");
+      logger.info("Saved review state no longer matches repository history. Resetting checkpoint.");
       lastReviewedId = null;
     }
   }
@@ -734,7 +728,7 @@ export async function runReviewCycle(config) {
 
   if (!lastReviewedId) {
     changeIdsToReview = [latestChangeId];
-    console.log(`Initialized state to review the latest ${backend.changeName} ${backend.formatChangeId(latestChangeId)} first.`);
+    logger.info(`Initialized state to review the latest ${backend.changeName} ${backend.formatChangeId(latestChangeId)} first.`);
   } else {
     changeIdsToReview = await backend.getPendingChangeIds(
       config,
@@ -745,21 +739,22 @@ export async function runReviewCycle(config) {
     );
   }
 
-  debugLog(config, `Planned ${changeIdsToReview.length} ${backend.changeName}(s) for this cycle.`);
+  logger.debug(`Planned ${changeIdsToReview.length} ${backend.changeName}(s) for this cycle.`);
 
   if (changeIdsToReview.length === 0) {
     const lastKnownId = lastReviewedId ? backend.formatChangeId(lastReviewedId) : "(none)";
-    console.log(`No new ${backend.changeName}s. Last reviewed: ${lastKnownId}`);
+    logger.info(`No new ${backend.changeName}s. Last reviewed: ${lastKnownId}`);
     return;
   }
 
-  console.log(`Reviewing ${backend.displayName} ${backend.changeName}s ${formatChangeList(backend, changeIdsToReview)}`);
+  logger.info(`Reviewing ${backend.displayName} ${backend.changeName}s ${formatChangeList(backend, changeIdsToReview)}`);
   const progressDisplay = new ProgressDisplay();
+  logger.setProgressDisplay(progressDisplay);
   const progress = progressDisplay.createItem(`${backend.displayName} ${backend.changeName} batch`);
   progress.start("0/" + changeIdsToReview.length + " completed");
 
   for (const [index, changeId] of changeIdsToReview.entries()) {
-    debugLog(config, `Starting review for ${backend.formatChangeId(changeId)}.`);
+    logger.debug(`Starting review for ${backend.formatChangeId(changeId)}.`);
     const displayId = backend.formatChangeId(changeId);
     updateOverallProgress(progress, index, changeIdsToReview.length, 0, `starting ${displayId}`);
 
@@ -784,7 +779,7 @@ export async function runReviewCycle(config) {
     const nextProjectState = buildStateSnapshot(backend, targetInfo, changeId);
     await saveState(config.stateFilePath, updateProjectState(stateFile, targetInfo, nextProjectState));
     stateFile.projects[targetInfo.stateKey] = nextProjectState;
-    debugLog(config, `Saved checkpoint for ${backend.formatChangeId(changeId)} to ${config.stateFilePath}.`);
+    logger.debug(`Saved checkpoint for ${backend.formatChangeId(changeId)} to ${config.stateFilePath}.`);
     progress.log(`[done] reviewed ${displayId}: ${outputLabels.join(" | ") || "(no report file generated)"}`);
     updateOverallProgress(progress, index + 1, changeIdsToReview.length, 0, `finished ${displayId}`);
   }
@@ -800,6 +795,6 @@ export async function runReviewCycle(config) {
   );
 
   if (remainingChanges.length > 0) {
-    console.log(`Backlog remains. Latest ${backend.changeName} is ${backend.formatChangeId(latestChangeId)}.`);
+    logger.info(`Backlog remains. Latest ${backend.changeName} is ${backend.formatChangeId(latestChangeId)}.`);
   }
 }
