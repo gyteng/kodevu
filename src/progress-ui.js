@@ -1,3 +1,5 @@
+import { logger } from "./logger.js";
+
 function clampProgress(value) {
   if (!Number.isFinite(value)) {
     return 0;
@@ -19,6 +21,7 @@ class ProgressItem {
   start(stage = "starting") {
     this.active = true;
     this.stage = stage;
+    logger.debug(`${this.label} batch start: ${stage}`);
     this.writeStatus();
   }
 
@@ -27,21 +30,28 @@ class ProgressItem {
 
     if (stage) {
       this.stage = stage;
+      logger.debug(`${this.label} stage: ${stage} (${Math.round(this.progress * 100)}%)`);
     }
 
     this.writeStatus();
   }
 
   log(message) {
+    // We don't log to file here because usually progress.log() is called alongside logger.info()
+    // or we want the caller to decide whether it goes to the log file.
     this.display.writeLine(message);
   }
 
   succeed(message) {
-    this.finish("[done]", 1, message || `${this.label} complete`);
+    const finalMsg = message || `${this.label} complete`;
+    this.finish("[done]", 1, finalMsg);
+    logger.debug(`${this.label} batch succeed: ${finalMsg}`);
   }
 
   fail(message) {
-    this.finish("[fail]", this.progress, message || `${this.label} failed`);
+    const finalMsg = message || `${this.label} failed`;
+    this.finish("[fail]", this.progress, finalMsg);
+    logger.error(`${this.label} batch fail: ${finalMsg}`);
   }
 
   finish(prefix, progress, message) {

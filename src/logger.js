@@ -38,6 +38,10 @@ class Logger {
     this._log("INFO", message);
   }
 
+  warn(message) {
+    this._log("WARN", message);
+  }
+
   error(message, error) {
     let msg = message;
     if (error) {
@@ -68,6 +72,7 @@ class Logger {
     // Console output
     const isDebug = level === "DEBUG";
     const isError = level === "ERROR";
+    const isWarn = level === "WARN";
 
     // If it's debug and debug mode is off, skip console
     if (isDebug && !this.config?.debug) return;
@@ -75,10 +80,10 @@ class Logger {
     if (this.progressDisplay) {
       this.progressDisplay.log(logLine);
     } else {
-      if (isError) {
+      if (isError || isWarn) {
         console.error(logLine);
       } else {
-        console.error(logLine);
+        console.log(logLine);
       }
     }
   }

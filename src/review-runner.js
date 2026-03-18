@@ -582,6 +582,8 @@ function buildStateSnapshot(backend, targetInfo, changeId) {
 }
 
 async function reviewChange(config, backend, targetInfo, changeId, progress) {
+  const displayId = backend.formatChangeId(changeId);
+  logger.info(`Starting review for ${backend.changeName} ${displayId}`);
   progress?.update(0.05, "loading change details");
   const details = await backend.getChangeDetails(config, targetInfo, changeId);
 
@@ -650,7 +652,8 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
     }
 
     if (reviewerName !== reviewersToTry[reviewersToTry.length - 1]) {
-      progress?.log(`${reviewer.displayName} failed for ${details.displayId}; trying next reviewer...`);
+      const msg = `${reviewer.displayName} failed for ${details.displayId}; trying next reviewer...`;
+      logger.warn(msg);
     }
   }
 
@@ -678,6 +681,13 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
       }`
     );
   }
+
+  const outputLabels = [
+    shouldWriteFormat(config, "markdown") ? `md: ${outputFile}` : null,
+    shouldWriteFormat(config, "json") ? `json: ${jsonOutputFile}` : null
+  ].filter(Boolean);
+  
+  logger.info(`Completed review for ${displayId}: ${outputLabels.join(" | ") || "(no report file generated)"}`);
 
   return {
     success: true,
@@ -772,15 +782,10 @@ export async function runReviewCycle(config) {
       throw error;
     }
 
-    const outputLabels = [
-      result.outputFile ? `md: ${result.outputFile}` : null,
-      result.jsonOutputFile ? `json: ${result.jsonOutputFile}` : null
-    ].filter(Boolean);
     const nextProjectState = buildStateSnapshot(backend, targetInfo, changeId);
     await saveState(config.stateFilePath, updateProjectState(stateFile, targetInfo, nextProjectState));
     stateFile.projects[targetInfo.stateKey] = nextProjectState;
     logger.debug(`Saved checkpoint for ${backend.formatChangeId(changeId)} to ${config.stateFilePath}.`);
-    progress.log(`[done] reviewed ${displayId}: ${outputLabels.join(" | ") || "(no report file generated)"}`);
     updateOverallProgress(progress, index + 1, changeIdsToReview.length, 0, `finished ${displayId}`);
   }
 

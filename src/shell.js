@@ -25,7 +25,9 @@ export async function runCommand(command, args = [], options = {}) {
   } = options;
 
   logger.debug(
-    `run: ${command} ${args.join(" ")}${cwd ? ` | cwd=${cwd}` : ""}${timeoutMs > 0 ? ` | timeoutMs=${timeoutMs}` : ""}`
+    `run: ${command} ${args.join(" ")}${cwd ? ` | cwd=${cwd}` : ""}${timeoutMs > 0 ? ` | timeoutMs=${timeoutMs}` : ""}${
+      input ? ` | input=${summarizeOutput(input)}` : ""
+    }`
   );
 
   return await new Promise((resolve, reject) => {
@@ -51,7 +53,10 @@ export async function runCommand(command, args = [], options = {}) {
       stderrChunks.push(Buffer.from(chunk));
     });
 
-    child.on("error", reject);
+    child.on("error", (err) => {
+      logger.error(`spawn error: ${command}`, err);
+      reject(err);
+    });
 
     child.on("close", (code) => {
       if (timer) {
@@ -67,9 +72,14 @@ export async function runCommand(command, args = [], options = {}) {
         stderr: trim ? stderr.trim() : stderr
       };
 
-      logger.debug(
-        `exit: ${command} code=${result.code} timedOut=${result.timedOut} stdout=${summarizeOutput(result.stdout)} stderr=${summarizeOutput(result.stderr)}`
-      );
+      const level = (result.code !== 0 || result.timedOut) && !allowFailure ? "ERROR" : "DEBUG";
+      const exitMsg = `exit: ${command} code=${result.code} timedOut=${result.timedOut} stdout=${summarizeOutput(result.stdout)} stderr=${summarizeOutput(result.stderr)}`;
+      
+      if (level === "ERROR") {
+        logger.error(exitMsg);
+      } else {
+        logger.debug(exitMsg);
+      }
 
       if ((result.code !== 0 || result.timedOut) && !allowFailure) {
         const error = new Error(
