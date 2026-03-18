@@ -49,6 +49,7 @@ try {
         reviewerWasAutoSelected: config.reviewerWasAutoSelected,
         target: config.target,
         outputDir: config.outputDir,
+        lang: config.lang,
         debug: config.debug
       })}`
     );

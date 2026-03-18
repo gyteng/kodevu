@@ -18,6 +18,9 @@ const DIFF_LIMITS = {
   tailLines: 200
 };
 
+const CORE_REVIEW_INSTRUCTION =
+  "Please strictly review the current changes, prioritizing bugs, regression risks, compatibility issues, security concerns, boundary condition flaws, and missing tests. Please use Markdown for your response. If no clear flaws are found, write \"No clear flaws found\" and supplement with residual risks.";
+
 
 function estimateTokenCount(text) {
   if (!text) {
@@ -419,7 +422,13 @@ function buildPrompt(config, backend, targetInfo, details, reviewDiffPayload) {
   const workspaceRoot = getReviewWorkspaceRoot(config, backend, targetInfo);
   const canReadRelatedFiles = backend.kind === "git" || Boolean(targetInfo.workingCopyPath);
 
+  const langInstruction = config.resolvedLang === "zh"
+    ? "Please use Simplified Chinese for your response."
+    : `Please use ${config.resolvedLang || "English"} for your response.`;
+
   return [
+    CORE_REVIEW_INSTRUCTION,
+    langInstruction,
     config.prompt,
     canReadRelatedFiles
       ? `You are running inside a read-only workspace rooted at: ${workspaceRoot}`
@@ -437,7 +446,7 @@ function buildPrompt(config, backend, targetInfo, details, reviewDiffPayload) {
     reviewDiffPayload.wasTruncated
       ? `Diff delivery note: the diff was truncated before being sent to the reviewer to stay within configured size limits. Original diff size was ${reviewDiffPayload.originalLineCount} lines / ${reviewDiffPayload.originalCharCount} chars, and the included excerpt is ${reviewDiffPayload.outputLineCount} lines / ${reviewDiffPayload.outputCharCount} chars. Use the changed file list and inspect related workspace files when needed.`
       : `Diff delivery note: the full diff is included. Size is ${reviewDiffPayload.originalLineCount} lines / ${reviewDiffPayload.originalCharCount} chars.`
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 function formatTokenUsage(tokenUsage) {

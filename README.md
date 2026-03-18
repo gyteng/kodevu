@@ -59,6 +59,12 @@ Run with debug logs:
 npx kodevu /path/to/your/repo --debug
 ```
 
+Specify the output language (e.g., Chinese):
+
+```bash
+npx kodevu /path/to/your/repo --lang zh
+```
+
 Use a custom config path only when needed:
 
 ```bash
@@ -77,7 +83,8 @@ npx kodevu /path/to/your/repo --config ./config.current.json
 
 - `target`: required repository target; can be provided by config or as the CLI positional argument
 - `reviewer`: `codex`, `gemini`, `copilot`, or `auto`; default `auto`
-- `prompt`: saved into the report as review context
+- `prompt`: additional instructions for the reviewer; usually empty by default as the core instructions are built-in
+- `lang`: output language for the review (e.g., `zh`, `en`, `auto`); default `auto`
 - `outputDir`: report output directory; default `~/.kodevu`
 - `outputFormats`: report formats to generate; supports `markdown` and `json`; default `["markdown"]`
 - `stateFilePath`: review state file path; default `~/.kodevu/state.json`
@@ -110,6 +117,7 @@ Internal defaults:
 - If `outputFormats` includes `json`, matching `.json` files are generated alongside Markdown reports.
 - `~/.kodevu/state.json` stores per-project checkpoints keyed by repository identity; only the v2 multi-project structure is supported.
 - If the reviewer command exits non-zero or times out, the report is still written, but the state is not advanced so the change can be retried later.
+- Review instructions are built into the tool in English to ensure consistent logic across reviewers. The `lang` setting (CLI `--lang` or config `lang`) determines the language AI uses for the resulting review. When set to `auto`, Kodevu detects the language from the system environment (`LANG`, `LC_ALL`, or system locale).
 - Each report includes a `Token Usage` section recording token consumption for the review task. When the reviewer CLI outputs token statistics (via stderr), those are used directly (`source: "reviewer"`). Otherwise tokens are estimated at ~4 characters per token (`source: "estimate"`). The JSON report contains a `tokenUsage` object with `inputTokens`, `outputTokens`, `totalTokens`, and `source`.
 
 ## License

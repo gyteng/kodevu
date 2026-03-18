@@ -6,15 +6,16 @@ import { findCommandOnPath } from "./shell.js";
 const defaultStorageDir = path.join(os.homedir(), ".kodevu");
 const SUPPORTED_REVIEWERS = ["codex", "gemini", "copilot"];
 
+
 const defaultConfig = {
   reviewer: "auto",
   target: "",
+  lang: "auto",
   outputDir: defaultStorageDir,
   stateFilePath: path.join(defaultStorageDir, "state.json"),
   logsDir: path.join(defaultStorageDir, "logs"),
   commandTimeoutMs: 600000,
-  prompt:
-    "请严格审查当前变更，优先指出 bug、回归风险、兼容性问题、安全问题、边界条件缺陷和缺失测试。请使用简体中文输出 Markdown；如果没有明确缺陷，请写“未发现明确缺陷”，并补充剩余风险。",
+  prompt: "",
   maxRevisionsPerRun: 5,
   outputFormats: ["markdown"]
 };
@@ -22,6 +23,7 @@ const defaultConfig = {
 const configTemplate = {
   target: "C:/path/to/your/repository-or-subdirectory",
   reviewer: defaultConfig.reviewer,
+  lang: defaultConfig.lang,
   prompt: defaultConfig.prompt,
   outputDir: "~/.kodevu",
   stateFilePath: "~/.kodevu/state.json",
@@ -74,6 +76,38 @@ function normalizeOutputFormats(outputFormats, loadedConfigPath) {
   return normalized;
 }
 
+function detectLanguage() {
+  const envLang = (process.env.LANG || process.env.LC_ALL || process.env.LC_MESSAGES || "").toLowerCase();
+  const intlLocale = (() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase();
+    } catch {
+      return "";
+    }
+  })();
+
+  // On Windows, the LANG environment variable is often set to 'en_US.UTF-8' by default
+  // in many shells (like Git Bash/MSYS2), regardless of the actual OS display language.
+  // We prefer the system locale (Intl) on Windows if it's Chinese.
+  if (os.platform() === "win32" && intlLocale.startsWith("zh")) {
+    return "zh";
+  }
+
+  if (envLang) {
+    if (envLang.startsWith("zh")) return "zh";
+    if (envLang.startsWith("en")) return "en";
+    return envLang.split(/[._-]/)[0];
+  }
+
+  if (intlLocale) {
+    if (intlLocale.startsWith("zh")) return "zh";
+    if (intlLocale.startsWith("en")) return "en";
+    return intlLocale.split("-")[0];
+  }
+
+  return "en";
+}
+
 async function resolveAutoReviewers(debug, loadedConfigPath) {
   const availableReviewers = [];
 
@@ -109,6 +143,7 @@ export function parseCliArgs(argv) {
     debug: false,
     help: false,
     reviewer: "",
+    lang: "",
     prompt: "",
     commandExplicitlySet: false
   };
@@ -163,6 +198,16 @@ export function parseCliArgs(argv) {
       continue;
     }
 
+    if (value === "--lang" || value === "-l") {
+      const lang = argv[index + 1];
+      if (!lang || lang.startsWith("-")) {
+        throw new Error(`Missing value for ${value}`);
+      }
+      args.lang = lang;
+      index += 1;
+      continue;
+    }
+
     if (!value.startsWith("-") && args.command === "run" && !args.target) {
       args.target = value;
       continue;
@@ -209,12 +254,19 @@ export async function loadConfig(configPath, cliArgs = {}) {
     config.prompt = cliArgs.prompt;
   }
 
+  if (cliArgs.lang) {
+    config.lang = cliArgs.lang;
+  }
+
   if (!config.target) {
     throw new Error('Missing target. Pass `npx kodevu <repo-path>` or set "target" in config.json.');
   }
 
   config.debug = Boolean(cliArgs.debug);
   config.reviewer = String(config.reviewer || "auto").toLowerCase();
+  config.lang = String(config.lang || "auto").toLowerCase();
+
+  config.resolvedLang = config.lang === "auto" ? detectLanguage() : config.lang;
 
   if (config.reviewer === "auto") {
     const availableReviewers = await resolveAutoReviewers(config.debug, loadedConfigPath);
@@ -264,6 +316,7 @@ Options:
   --config, -c   Optional config json path. If omitted, ./config.json is loaded only when present
   --reviewer, -r Override reviewer (codex | gemini | copilot | auto)
   --prompt, -p   Override prompt
+  --lang, -l     Override output language (e.g. zh, en, auto)
   --debug, -d    Print extra debug information to the console
   --help, -h     Show help
 
