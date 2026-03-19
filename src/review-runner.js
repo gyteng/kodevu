@@ -1,594 +1,27 @@
-import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { ProgressDisplay } from "./progress-ui.js";
-import { runCommand } from "./shell.js";
 import { resolveRepositoryContext } from "./vcs-client.js";
 import { logger } from "./logger.js";
-
-const DIFF_LIMITS = {
-  review: {
-    maxLines: 4000,
-    maxChars: 120000
-  },
-  report: {
-    maxLines: 1500,
-    maxChars: 40000
-  },
-  tailLines: 200
-};
-
-const CORE_REVIEW_INSTRUCTION =
-  "Please strictly review the current changes, prioritizing bugs, regression risks, compatibility issues, security concerns, boundary condition flaws, and missing tests. Please use Markdown for your response. If no clear flaws are found, write \"No clear flaws found\" and supplement with residual risks.";
-
-
-function estimateTokenCount(text) {
-  if (!text) {
-    return 0;
-  }
-
-  return Math.ceil(text.length / 4);
-}
-
-function parseGeminiTokenUsage(stderr) {
-  if (!stderr) {
-    return null;
-  }
-
-  const patterns = [
-    /input[_ ]tokens?\s*[:=]\s*(\d+)/i,
-    /output[_ ]tokens?\s*[:=]\s*(\d+)/i,
-    /total[_ ]tokens?\s*[:=]\s*(\d+)/i
-  ];
-
-  const inputMatch = stderr.match(patterns[0]);
-  const outputMatch = stderr.match(patterns[1]);
-  const totalMatch = stderr.match(patterns[2]);
-
-  if (!inputMatch && !outputMatch && !totalMatch) {
-    return null;
-  }
-
-  const inputTokens = inputMatch ? Number(inputMatch[1]) : 0;
-  const outputTokens = outputMatch ? Number(outputMatch[1]) : 0;
-  const totalTokens = totalMatch ? Number(totalMatch[1]) : inputTokens + outputTokens;
-
-  return { inputTokens, outputTokens, totalTokens };
-}
-
-function parseCodexTokenUsage(stderr) {
-  if (!stderr) {
-    return null;
-  }
-
-  const patterns = [
-    /input[_ ]tokens?\s*[:=]\s*(\d+)/i,
-    /output[_ ]tokens?\s*[:=]\s*(\d+)/i,
-    /total[_ ]tokens?\s*[:=]\s*(\d+)/i
-  ];
-
-  const inputMatch = stderr.match(patterns[0]);
-  const outputMatch = stderr.match(patterns[1]);
-  const totalMatch = stderr.match(patterns[2]);
-
-  if (!inputMatch && !outputMatch && !totalMatch) {
-    return null;
-  }
-
-  const inputTokens = inputMatch ? Number(inputMatch[1]) : 0;
-  const outputTokens = outputMatch ? Number(outputMatch[1]) : 0;
-  const totalTokens = totalMatch ? Number(totalMatch[1]) : inputTokens + outputTokens;
-
-  return { inputTokens, outputTokens, totalTokens };
-}
-
-function parseCopilotTokenUsage(stderr) {
-  if (!stderr) {
-    return null;
-  }
-
-  const patterns = [
-    /input[_ ]tokens?\s*[:=]\s*(\d+)/i,
-    /output[_ ]tokens?\s*[:=]\s*(\d+)/i,
-    /total[_ ]tokens?\s*[:=]\s*(\d+)/i
-  ];
-
-  const inputMatch = stderr.match(patterns[0]);
-  const outputMatch = stderr.match(patterns[1]);
-  const totalMatch = stderr.match(patterns[2]);
-
-  if (!inputMatch && !outputMatch && !totalMatch) {
-    return null;
-  }
-
-  const inputTokens = inputMatch ? Number(inputMatch[1]) : 0;
-  const outputTokens = outputMatch ? Number(outputMatch[1]) : 0;
-  const totalTokens = totalMatch ? Number(totalMatch[1]) : inputTokens + outputTokens;
-
-  return { inputTokens, outputTokens, totalTokens };
-}
-
-const TOKEN_PARSERS = {
-  gemini: parseGeminiTokenUsage,
-  codex: parseCodexTokenUsage,
-  copilot: parseCopilotTokenUsage
-};
-
-function resolveTokenUsage(reviewerName, stderr, promptText, diffText, responseText) {
-  const parseFn = TOKEN_PARSERS[reviewerName] || parseCopilotTokenUsage;
-  const parsed = parseFn(stderr);
-
-  if (parsed && parsed.totalTokens > 0) {
-    return { ...parsed, source: "reviewer" };
-  }
-
-  const inputTokens = estimateTokenCount((promptText || "") + (diffText || ""));
-  const outputTokens = estimateTokenCount(responseText || "");
-
-  return {
-    inputTokens,
-    outputTokens,
-    totalTokens: inputTokens + outputTokens,
-    source: "estimate"
-  };
-}
-
-const REVIEWERS = {
-  codex: {
-    displayName: "Codex",
-    responseSectionTitle: "Codex Response",
-    emptyResponseText: "_No final response returned from codex exec._",
-    async run(config, workingDir, promptText, diffText) {
-      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "kodevu-"));
-      const outputFile = path.join(tempDir, "codex-last-message.md");
-      const args = [
-        "exec",
-        "--skip-git-repo-check",
-        "--sandbox",
-        "read-only",
-        "--color",
-        "never",
-        "--output-last-message",
-        outputFile,
-        "-"
-      ];
-
-      try {
-        const execResult = await runCommand("codex", args, {
-          cwd: workingDir,
-          input: [promptText, "Unified diff:", diffText].join("\n\n"),
-          allowFailure: true,
-          timeoutMs: config.commandTimeoutMs,
-          debug: config.debug
-        });
-
-        let message = "";
-
-        try {
-          message = await fs.readFile(outputFile, "utf8");
-        } catch {
-          message = execResult.stdout;
-        }
-
-        return {
-          ...execResult,
-          message
-        };
-      } finally {
-        await fs.rm(tempDir, { recursive: true, force: true });
-      }
-    }
-  },
-  gemini: {
-    displayName: "Gemini",
-    responseSectionTitle: "Gemini Response",
-    emptyResponseText: "_No final response returned from gemini._",
-    async run(config, workingDir, promptText, diffText) {
-      const execResult = await runCommand("gemini", ["-p", promptText], {
-        cwd: workingDir,
-        input: ["Unified diff:", diffText].join("\n\n"),
-        allowFailure: true,
-        timeoutMs: config.commandTimeoutMs,
-        debug: config.debug
-      });
-
-      return {
-        ...execResult,
-        message: execResult.stdout
-      };
-    }
-  },
-  copilot: {
-    displayName: "Copilot",
-    responseSectionTitle: "Copilot Response",
-    emptyResponseText: "_No final response returned from copilot._",
-    async run(config, workingDir, promptText, diffText) {
-      const execResult = await runCommand("copilot", ["-p", promptText], {
-        cwd: workingDir,
-        input: ["Unified diff:", diffText].join("\n\n"),
-        allowFailure: true,
-        timeoutMs: config.commandTimeoutMs,
-        debug: config.debug
-      });
-
-      return {
-        ...execResult,
-        message: execResult.stdout
-      };
-    }
-  }
-};
-
-async function ensureDir(targetPath) {
-  await fs.mkdir(targetPath, { recursive: true });
-}
-
-async function pathExists(targetPath) {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function loadState(stateFile) {
-  if (!(await pathExists(stateFile))) {
-    return { version: 2, projects: {} };
-  }
-
-  const raw = await fs.readFile(stateFile, "utf8");
-  return normalizeStateFile(JSON.parse(raw));
-}
-
-async function saveState(stateFile, state) {
-  await ensureDir(path.dirname(stateFile));
-  await fs.writeFile(stateFile, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-}
-
-function normalizeStateFile(state) {
-  if (!state || typeof state !== "object" || Array.isArray(state)) {
-    throw new Error('State file must be a JSON object with shape {"version":2,"projects":{...}}.');
-  }
-
-  if (state.version !== 2) {
-    throw new Error('State file version must be 2.');
-  }
-
-  if (!state.projects || typeof state.projects !== "object" || Array.isArray(state.projects)) {
-    throw new Error('State file must contain a "projects" object.');
-  }
-
-  return {
-    version: 2,
-    projects: state.projects
-  };
-}
-
-function getProjectState(stateFile, targetInfo) {
-  return stateFile.projects?.[targetInfo.stateKey] ?? {};
-}
-
-function updateProjectState(stateFile, targetInfo, projectState) {
-  return {
-    version: 2,
-    projects: {
-      ...(stateFile.projects || {}),
-      [targetInfo.stateKey]: projectState
-    }
-  };
-}
-
-async function writeTextFile(filePath, contents) {
-  await ensureDir(path.dirname(filePath));
-  await fs.writeFile(filePath, contents, "utf8");
-}
-
-async function writeJsonFile(filePath, payload) {
-  await ensureDir(path.dirname(filePath));
-  await fs.writeFile(filePath, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-}
-
-function shouldWriteFormat(config, format) {
-  return Array.isArray(config.outputFormats) && config.outputFormats.includes(format);
-}
-
-function formatChangedPaths(changedPaths) {
-  if (changedPaths.length === 0) {
-    return "_No changed files captured._";
-  }
-
-  return changedPaths
-    .map((item) => {
-      const renameSuffix = item.previousPath ? ` (from ${item.previousPath})` : "";
-      return `- \`${item.action}\` ${item.relativePath}${renameSuffix}`;
-    })
-    .join("\n");
-}
-
-function getReviewWorkspaceRoot(config, backend, targetInfo) {
-  if (backend.kind === "git" && targetInfo.repoRootPath) {
-    return targetInfo.repoRootPath;
-  }
-
-  if (backend.kind === "svn" && targetInfo.workingCopyPath) {
-    return targetInfo.workingCopyPath;
-  }
-
-  return config.baseDir;
-}
-
-function countLines(text) {
-  if (!text) {
-    return 0;
-  }
-
-  return text.split(/\r?\n/).length;
-}
-
-function trimBlockToChars(text, maxChars, keepTail = false) {
-  if (text.length <= maxChars) {
-    return text;
-  }
-
-  if (maxChars <= 3) {
-    return ".".repeat(Math.max(maxChars, 0));
-  }
-
-  return keepTail ? `...${text.slice(-(maxChars - 3))}` : `${text.slice(0, maxChars - 3)}...`;
-}
-
-function truncateDiffText(diffText, maxLines, maxChars, tailLines, purposeLabel) {
-  const normalizedDiff = diffText.replace(/\r\n/g, "\n");
-  const originalLineCount = countLines(normalizedDiff);
-  const originalCharCount = normalizedDiff.length;
-
-  if (originalLineCount <= maxLines && originalCharCount <= maxChars) {
-    return {
-      text: diffText,
-      wasTruncated: false,
-      originalLineCount,
-      originalCharCount,
-      outputLineCount: originalLineCount,
-      outputCharCount: originalCharCount
-    };
-  }
-
-  const lines = normalizedDiff.split("\n");
-  const safeTailLines = Math.min(Math.max(tailLines, 0), Math.max(maxLines - 2, 0));
-  const headLineCount = Math.max(maxLines - safeTailLines - 1, 1);
-  let headBlock = lines.slice(0, headLineCount).join("\n");
-  let tailBlock = safeTailLines > 0 ? lines.slice(-safeTailLines).join("\n") : "";
-  const omittedLineCount = Math.max(originalLineCount - headLineCount - safeTailLines, 0);
-  const markerBlock = [
-    `... diff truncated for ${purposeLabel} ...`,
-    `original lines: ${originalLineCount}, original chars: ${originalCharCount}`,
-    `omitted lines: ${omittedLineCount}`
-  ].join("\n");
-
-  let truncatedText = [headBlock, markerBlock, tailBlock].filter(Boolean).join("\n");
-
-  if (truncatedText.length > maxChars) {
-    const reservedChars = markerBlock.length + (tailBlock ? 2 : 1);
-    const remainingChars = Math.max(maxChars - reservedChars, 0);
-    const headBudget = tailBlock ? Math.floor(remainingChars * 0.7) : remainingChars;
-    const tailBudget = tailBlock ? Math.max(remainingChars - headBudget, 0) : 0;
-    headBlock = trimBlockToChars(headBlock, headBudget, false);
-    tailBlock = trimBlockToChars(tailBlock, tailBudget, true);
-    truncatedText = [headBlock, markerBlock, tailBlock].filter(Boolean).join("\n");
-  }
-
-  return {
-    text: truncatedText,
-    wasTruncated: true,
-    originalLineCount,
-    originalCharCount,
-    outputLineCount: countLines(truncatedText),
-    outputCharCount: truncatedText.length
-  };
-}
-
-function prepareDiffPayloads(config, diffText) {
-  return {
-    review: truncateDiffText(
-      diffText,
-      DIFF_LIMITS.review.maxLines,
-      DIFF_LIMITS.review.maxChars,
-      DIFF_LIMITS.tailLines,
-      "reviewer input"
-    ),
-    report: truncateDiffText(
-      diffText,
-      DIFF_LIMITS.report.maxLines,
-      DIFF_LIMITS.report.maxChars,
-      Math.min(DIFF_LIMITS.tailLines, DIFF_LIMITS.report.maxLines),
-      "report output"
-    )
-  };
-}
-
-function formatDiffHandling(diffPayload, label) {
-  return [
-    `- ${label} Original Lines: \`${diffPayload.originalLineCount}\``,
-    `- ${label} Original Chars: \`${diffPayload.originalCharCount}\``,
-    `- ${label} Included Lines: \`${diffPayload.outputLineCount}\``,
-    `- ${label} Included Chars: \`${diffPayload.outputCharCount}\``,
-    `- ${label} Truncated: \`${diffPayload.wasTruncated ? "yes" : "no"}\``
-  ].join("\n");
-}
-
-function buildPrompt(config, backend, targetInfo, details, reviewDiffPayload) {
-  const fileList = details.changedPaths.map((item) => `${item.action} ${item.relativePath}`).join("\n");
-  const workspaceRoot = getReviewWorkspaceRoot(config, backend, targetInfo);
-  const canReadRelatedFiles = backend.kind === "git" || Boolean(targetInfo.workingCopyPath);
-
-  const langInstruction = config.resolvedLang === "zh"
-    ? "Please use Simplified Chinese for your response."
-    : `Please use ${config.resolvedLang || "English"} for your response.`;
-
-  return [
-    CORE_REVIEW_INSTRUCTION,
-    langInstruction,
-    config.prompt,
-    canReadRelatedFiles
-      ? `You are running inside a read-only workspace rooted at: ${workspaceRoot}`
-      : "No local repository workspace is available for this review run.",
-    canReadRelatedFiles
-      ? "Besides the diff below, you may read other related files in the workspace when needed to understand call sites, shared utilities, configuration, tests, or data flow. Do not modify files or rely on shell commands."
-      : "Review primarily from the diff below. Do not assume access to other local files, shell commands, or repository history.",
-    "Use plain text file references like path/to/file.js:123. Do not emit clickable workspace links.",
-    `Repository Type: ${backend.displayName}`,
-    `Change ID: ${details.displayId}`,
-    `Author: ${details.author}`,
-    `Date: ${details.date || "unknown"}`,
-    `Changed files:\n${fileList || "(none)"}`,
-    `Commit message:\n${details.message || "(empty)"}`,
-    reviewDiffPayload.wasTruncated
-      ? `Diff delivery note: the diff was truncated before being sent to the reviewer to stay within configured size limits. Original diff size was ${reviewDiffPayload.originalLineCount} lines / ${reviewDiffPayload.originalCharCount} chars, and the included excerpt is ${reviewDiffPayload.outputLineCount} lines / ${reviewDiffPayload.outputCharCount} chars. Use the changed file list and inspect related workspace files when needed.`
-      : `Diff delivery note: the full diff is included. Size is ${reviewDiffPayload.originalLineCount} lines / ${reviewDiffPayload.originalCharCount} chars.`
-  ].filter(Boolean).join("\n\n");
-}
-
-function formatTokenUsage(tokenUsage) {
-  const sourceLabel = tokenUsage.source === "reviewer" ? "reviewer reported" : "estimated (~4 chars/token)";
-  return [
-    `- Input Tokens: \`${tokenUsage.inputTokens}\``,
-    `- Output Tokens: \`${tokenUsage.outputTokens}\``,
-    `- Total Tokens: \`${tokenUsage.totalTokens}\``,
-    `- Token Source: \`${sourceLabel}\``
-  ].join("\n");
-}
-
-function buildReport(config, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage) {
-  const lines = [
-    `# ${backend.displayName} Review Report: ${details.displayId}`,
-    "",
-    `- Repository Type: \`${backend.displayName}\``,
-    `- Target: \`${targetInfo.targetDisplay || config.target}\``,
-    `- Change ID: \`${details.displayId}\``,
-    `- Author: \`${details.author}\``,
-    `- Commit Date: \`${details.date || "unknown"}\``,
-    `- Generated At: \`${new Date().toISOString()}\``,
-    `- Reviewer: \`${reviewer.displayName}\``,
-    `- Reviewer Exit Code: \`${reviewerResult.code}\``,
-    `- Reviewer Timed Out: \`${reviewerResult.timedOut ? "yes" : "no"}\``,
-    "",
-    "## Token Usage",
-    "",
-    formatTokenUsage(tokenUsage),
-    "",
-    "## Changed Files",
-    "",
-    formatChangedPaths(details.changedPaths),
-    "",
-    "## Commit Message",
-    "",
-    details.message ? "```text\n" + details.message + "\n```" : "_Empty_",
-    "",
-    "## Review Context",
-    "",
-    "```text",
-    buildPrompt(config, backend, targetInfo, details, diffPayloads.review),
-    "```",
-    "",
-    "## Diff Handling",
-    "",
-    formatDiffHandling(diffPayloads.review, "Reviewer Input"),
-    formatDiffHandling(diffPayloads.report, "Report Diff"),
-    "",
-    "## Diff",
-    "",
-    "```diff",
-    diffPayloads.report.text.trim() || "(empty diff)",
-    "```",
-    "",
-    `## ${reviewer.responseSectionTitle}`,
-    "",
-    reviewerResult.message?.trim() ? reviewerResult.message.trim() : reviewer.emptyResponseText
-  ];
-
-  return `${lines.join("\n")}\n`;
-}
-
-function buildJsonReport(config, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage) {
-  return {
-    repositoryType: backend.displayName,
-    target: targetInfo.targetDisplay || config.target,
-    changeId: details.displayId,
-    author: details.author,
-    commitDate: details.date || "unknown",
-    generatedAt: new Date().toISOString(),
-    reviewer: {
-      name: reviewer.displayName,
-      exitCode: reviewerResult.code,
-      timedOut: Boolean(reviewerResult.timedOut)
-    },
-    tokenUsage: {
-      inputTokens: tokenUsage.inputTokens,
-      outputTokens: tokenUsage.outputTokens,
-      totalTokens: tokenUsage.totalTokens,
-      source: tokenUsage.source
-    },
-    changedFiles: details.changedPaths.map((item) => ({
-      action: item.action,
-      path: item.relativePath,
-      previousPath: item.previousPath || null
-    })),
-    commitMessage: details.message || "",
-    reviewContext: buildPrompt(config, backend, targetInfo, details, diffPayloads.review),
-    diffHandling: {
-      reviewerInput: {
-        originalLines: diffPayloads.review.originalLineCount,
-        originalChars: diffPayloads.review.originalCharCount,
-        includedLines: diffPayloads.review.outputLineCount,
-        includedChars: diffPayloads.review.outputCharCount,
-        truncated: diffPayloads.review.wasTruncated
-      },
-      reportDiff: {
-        originalLines: diffPayloads.report.originalLineCount,
-        originalChars: diffPayloads.report.originalCharCount,
-        includedLines: diffPayloads.report.outputLineCount,
-        includedChars: diffPayloads.report.outputCharCount,
-        truncated: diffPayloads.report.wasTruncated
-      }
-    },
-    diff: diffPayloads.report.text.trim(),
-    reviewerResponse: reviewerResult.message?.trim() ? reviewerResult.message.trim() : reviewer.emptyResponseText
-  };
-}
-
-async function runReviewerPrompt(config, backend, targetInfo, details, diffText) {
-  const reviewer = REVIEWERS[config.reviewer];
-  const reviewWorkspaceRoot = getReviewWorkspaceRoot(config, backend, targetInfo);
-  const diffPayloads = prepareDiffPayloads(config, diffText);
-  const promptText = buildPrompt(config, backend, targetInfo, details, diffPayloads.review);
-  const result = await reviewer.run(config, reviewWorkspaceRoot, promptText, diffPayloads.review.text);
-  const tokenUsage = resolveTokenUsage(
-    config.reviewer,
-    result.stderr,
-    promptText,
-    diffPayloads.review.text,
-    result.message
-  );
-
-  return {
-    reviewer,
-    diffPayloads,
-    result,
-    tokenUsage
-  };
-}
-
-function readLastReviewedId(state, backend, targetInfo) {
-  return backend.fromStateValue(state);
-}
-
-function buildStateSnapshot(backend, targetInfo, changeId) {
-  return {
-    lastReviewedId: backend.toStateValue(changeId),
-    updatedAt: new Date().toISOString()
-  };
-}
+import {
+  ensureDir,
+  writeTextFile,
+  writeJsonFile
+} from "./utils.js";
+import {
+  loadState,
+  saveState,
+  getProjectState,
+  updateProjectState,
+  readLastReviewedId,
+  buildStateSnapshot
+} from "./state-manager.js";
+import {
+  shouldWriteFormat,
+  buildReport,
+  buildJsonReport,
+  formatChangeList
+} from "./report-generator.js";
+import { runReviewerPrompt } from "./reviewers.js";
 
 async function reviewChange(config, backend, targetInfo, changeId, progress) {
   const displayId = backend.formatChangeId(changeId);
@@ -644,24 +77,29 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
     logger.debug(`Trying reviewer: ${reviewerName}`);
     progress?.update(0.45, `running reviewer ${reviewerName}`);
 
-    const res = await runReviewerPrompt(
-      currentReviewerConfig,
-      backend,
-      targetInfo,
-      details,
-      diffText
-    );
-    reviewer = res.reviewer;
-    diffPayloads = res.diffPayloads;
-    reviewerResult = res.result;
-    tokenUsage = res.tokenUsage;
+    try {
+      const res = await runReviewerPrompt(
+        currentReviewerConfig,
+        backend,
+        targetInfo,
+        details,
+        diffText
+      );
+      reviewer = res.reviewer;
+      diffPayloads = res.diffPayloads;
+      reviewerResult = res.result;
+      tokenUsage = res.tokenUsage;
 
-    if (reviewerResult.code === 0 && !reviewerResult.timedOut) {
-      break;
+      if (reviewerResult.code === 0 && !reviewerResult.timedOut) {
+        break;
+      }
+    } catch (err) {
+      logger.error(`Reviewer prompt failed for ${reviewerName}: ${err.message}`);
+      // If it's the last one, it will throw below or break loop anyway
     }
 
     if (reviewerName !== reviewersToTry[reviewersToTry.length - 1]) {
-      const msg = `${reviewer.displayName} failed for ${details.displayId}; trying next reviewer...`;
+      const msg = `${reviewer?.displayName || reviewerName} failed for ${details.displayId}; trying next reviewer...`;
       logger.warn(msg);
     }
   }
@@ -704,10 +142,6 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
     jsonOutputFile: shouldWriteFormat(config, "json") ? jsonOutputFile : null,
     details
   };
-}
-
-function formatChangeList(backend, changeIds) {
-  return changeIds.map((changeId) => backend.formatChangeId(changeId)).join(", ");
 }
 
 function updateOverallProgress(progress, completedCount, totalCount, currentFraction, stage) {
@@ -791,24 +225,10 @@ export async function runReviewCycle(config) {
       throw error;
     }
 
-    const nextProjectState = buildStateSnapshot(backend, targetInfo, changeId);
-    await saveState(config.stateFilePath, updateProjectState(stateFile, targetInfo, nextProjectState));
-    stateFile.projects[targetInfo.stateKey] = nextProjectState;
+    const nextProjectSnapshot = buildStateSnapshot(backend, targetInfo, changeId);
+    await saveState(config.stateFilePath, updateProjectState(stateFile, targetInfo, nextProjectSnapshot));
+    stateFile.projects[targetInfo.stateKey] = nextProjectSnapshot;
     logger.debug(`Saved checkpoint for ${backend.formatChangeId(changeId)} to ${config.stateFilePath}.`);
     updateOverallProgress(progress, index + 1, changeIdsToReview.length, 0, `finished ${displayId}`);
-  }
-
-  progress.succeed(`completed ${changeIdsToReview.length}/${changeIdsToReview.length}`);
-
-  const remainingChanges = await backend.getPendingChangeIds(
-    config,
-    targetInfo,
-    changeIdsToReview[changeIdsToReview.length - 1],
-    latestChangeId,
-    1
-  );
-
-  if (remainingChanges.length > 0) {
-    logger.info(`Backlog remains. Latest ${backend.changeName} is ${backend.formatChangeId(latestChangeId)}.`);
   }
 }
