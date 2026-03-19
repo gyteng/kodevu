@@ -112,6 +112,20 @@ export async function getPendingRevisions(config, targetInfo, startExclusive, en
     .slice(0, limit);
 }
 
+export async function getLatestRevisionIds(config, targetInfo, limit) {
+  const result = await runCommand(
+    SVN_COMMAND,
+    ["log", "--xml", "--quiet", "-l", String(limit), "-r", "HEAD:1", getRemoteTarget(targetInfo, config)],
+    { encoding: COMMAND_ENCODING, trim: true, debug: config.debug }
+  );
+  const parsed = xmlParser.parse(result.stdout);
+
+  return asArray(parsed?.log?.logentry)
+    .map((entry) => Number(entry?.revision))
+    .filter((revision) => Number.isInteger(revision))
+    .sort((left, right) => left - right);
+}
+
 export async function getRevisionDiff(config, revision) {
   const result = await runCommand(
     SVN_COMMAND,

@@ -12,12 +12,13 @@ const defaultConfig = {
   target: "",
   lang: "auto",
   outputDir: defaultStorageDir,
-  stateFilePath: path.join(defaultStorageDir, "state.json"),
   logsDir: path.join(defaultStorageDir, "logs"),
   commandTimeoutMs: 600000,
   prompt: "",
   maxRevisionsPerRun: 5,
-  outputFormats: ["markdown"]
+  outputFormats: ["markdown"],
+  rev: "",
+  last: 0
 };
 
 const configTemplate = {
@@ -26,11 +27,12 @@ const configTemplate = {
   lang: defaultConfig.lang,
   prompt: defaultConfig.prompt,
   outputDir: "~/.kodevu",
-  stateFilePath: "~/.kodevu/state.json",
   logsDir: "~/.kodevu/logs",
   commandTimeoutMs: defaultConfig.commandTimeoutMs,
   maxRevisionsPerRun: defaultConfig.maxRevisionsPerRun,
-  outputFormats: defaultConfig.outputFormats
+  outputFormats: defaultConfig.outputFormats,
+  rev: "",
+  last: 1
 };
 
 function resolveConfigPath(baseDir, value) {
@@ -145,6 +147,8 @@ export function parseCliArgs(argv) {
     reviewer: "",
     lang: "",
     prompt: "",
+    rev: "",
+    last: "",
     commandExplicitlySet: false
   };
 
@@ -208,6 +212,26 @@ export function parseCliArgs(argv) {
       continue;
     }
 
+    if (value === "--rev" || value === "-v") {
+      const rev = argv[index + 1];
+      if (!rev || rev.startsWith("-")) {
+        throw new Error(`Missing value for ${value}`);
+      }
+      args.rev = rev;
+      index += 1;
+      continue;
+    }
+
+    if (value === "--last" || value === "-n") {
+      const last = argv[index + 1];
+      if (!last || last.startsWith("-")) {
+        throw new Error(`Missing value for ${value}`);
+      }
+      args.last = last;
+      index += 1;
+      continue;
+    }
+
     if (!value.startsWith("-") && args.command === "run" && !args.target) {
       args.target = value;
       continue;
@@ -258,6 +282,14 @@ export async function loadConfig(configPath, cliArgs = {}) {
     config.lang = cliArgs.lang;
   }
 
+  if (cliArgs.rev) {
+    config.rev = cliArgs.rev;
+  }
+
+  if (cliArgs.last) {
+    config.last = cliArgs.last;
+  }
+
   if (!config.target) {
     throw new Error('Missing target. Pass `npx kodevu <repo-path>` or set "target" in config.json.');
   }
@@ -284,11 +316,15 @@ export async function loadConfig(configPath, cliArgs = {}) {
   config.configPath = loadedConfigPath;
   config.baseDir = baseDir;
   config.outputDir = resolveConfigPath(config.baseDir, config.outputDir);
-  config.stateFilePath = resolveConfigPath(config.baseDir, config.stateFilePath);
   config.logsDir = resolveConfigPath(config.baseDir, config.logsDir);
   config.maxRevisionsPerRun = Number(config.maxRevisionsPerRun);
   config.commandTimeoutMs = Number(config.commandTimeoutMs);
+  config.last = Number(config.last);
   config.outputFormats = normalizeOutputFormats(config.outputFormats, loadedConfigPath);
+
+  if (!config.rev && (isNaN(config.last) || config.last <= 0)) {
+    config.last = 1;
+  }
 
   if (!Number.isInteger(config.maxRevisionsPerRun) || config.maxRevisionsPerRun <= 0) {
     throw new Error(`"maxRevisionsPerRun" must be a positive integer${loadedConfigPath ? ` in ${loadedConfigPath}` : ""}`);
@@ -317,6 +353,8 @@ Options:
   --reviewer, -r Override reviewer (codex | gemini | copilot | auto)
   --prompt, -p   Override prompt
   --lang, -l     Override output language (e.g. zh, en, auto)
+  --rev, -v      Review a specific revision or commit hash
+  --last, -n     Review the latest N revisions (default: 1)
   --debug, -d    Print extra debug information to the console
   --help, -h     Show help
 

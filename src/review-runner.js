@@ -8,14 +8,6 @@ import {
   writeJsonFile
 } from "./utils.js";
 import {
-  loadState,
-  saveState,
-  getProjectState,
-  updateProjectState,
-  readLastReviewedId,
-  buildStateSnapshot
-} from "./state-manager.js";
-import {
   shouldWriteFormat,
   buildReport,
   buildJsonReport,
@@ -158,45 +150,19 @@ export async function runReviewCycle(config) {
 
   const { backend, targetInfo } = await resolveRepositoryContext(config);
   logger.debug(
-    `Resolved repository context: backend=${backend.kind} target=${targetInfo.targetDisplay || config.target} stateKey=${targetInfo.stateKey}`
+    `Resolved repository context: backend=${backend.kind} target=${targetInfo.targetDisplay || config.target}`
   );
-  const latestChangeId = await backend.getLatestChangeId(config, targetInfo);
-  const stateFile = await loadState(config.stateFilePath);
-  const projectState = getProjectState(stateFile, targetInfo);
-  let lastReviewedId = readLastReviewedId(projectState, backend, targetInfo);
-  logger.debug(
-    `Checkpoint status: latest=${backend.formatChangeId(latestChangeId)} lastReviewed=${lastReviewedId ? backend.formatChangeId(lastReviewedId) : "(none)"}`
-  );
-
-  if (lastReviewedId) {
-    const checkpointIsValid = await backend.isValidCheckpoint(config, targetInfo, lastReviewedId, latestChangeId);
-
-    if (!checkpointIsValid) {
-      logger.info("Saved review state no longer matches repository history. Resetting checkpoint.");
-      lastReviewedId = null;
-    }
-  }
 
   let changeIdsToReview = [];
 
-  if (!lastReviewedId) {
-    changeIdsToReview = [latestChangeId];
-    logger.info(`Initialized state to review the latest ${backend.changeName} ${backend.formatChangeId(latestChangeId)} first.`);
+  if (config.rev) {
+    changeIdsToReview = [config.rev];
   } else {
-    changeIdsToReview = await backend.getPendingChangeIds(
-      config,
-      targetInfo,
-      lastReviewedId,
-      latestChangeId,
-      config.maxRevisionsPerRun
-    );
+    changeIdsToReview = await backend.getLatestChangeIds(config, targetInfo, config.last || 1);
   }
 
-  logger.debug(`Planned ${changeIdsToReview.length} ${backend.changeName}(s) for this cycle.`);
-
   if (changeIdsToReview.length === 0) {
-    const lastKnownId = lastReviewedId ? backend.formatChangeId(lastReviewedId) : "(none)";
-    logger.info(`No new ${backend.changeName}s. Last reviewed: ${lastKnownId}`);
+    logger.info("No changes found to review.");
     return;
   }
 
@@ -215,20 +181,12 @@ export async function runReviewCycle(config) {
       updateOverallProgress(progress, index, changeIdsToReview.length, fraction, `${displayId} | ${stage}`);
     };
 
-    let result;
-
     try {
-      result = await reviewChange(config, backend, targetInfo, changeId, { update: syncOverallProgress, log: (message) => progress.log(message) });
-      syncOverallProgress(0.94, "saving checkpoint");
+      await reviewChange(config, backend, targetInfo, changeId, { update: syncOverallProgress, log: (message) => progress.log(message) });
+      updateOverallProgress(progress, index + 1, changeIdsToReview.length, 0, `finished ${displayId}`);
     } catch (error) {
       progress.fail(`failed at ${displayId} (${index}/${changeIdsToReview.length} completed)`);
       throw error;
     }
-
-    const nextProjectSnapshot = buildStateSnapshot(backend, targetInfo, changeId);
-    await saveState(config.stateFilePath, updateProjectState(stateFile, targetInfo, nextProjectSnapshot));
-    stateFile.projects[targetInfo.stateKey] = nextProjectSnapshot;
-    logger.debug(`Saved checkpoint for ${backend.formatChangeId(changeId)} to ${config.stateFilePath}.`);
-    updateOverallProgress(progress, index + 1, changeIdsToReview.length, 0, `finished ${displayId}`);
   }
 }

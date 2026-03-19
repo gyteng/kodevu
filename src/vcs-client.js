@@ -42,8 +42,8 @@ function createSvnBackend() {
     async getLatestChangeId(config, targetInfo) {
       return await svnClient.getLatestRevision(config, targetInfo);
     },
-    async getPendingChangeIds(config, targetInfo, startExclusive, endInclusive, limit) {
-      return await svnClient.getPendingRevisions(config, targetInfo, startExclusive, endInclusive, limit);
+    async getLatestChangeIds(config, targetInfo, limit) {
+      return await svnClient.getLatestRevisionIds(config, targetInfo, limit);
     },
     async getChangeDiff(config, targetInfo, revision) {
       return await svnClient.getRevisionDiff(config, revision);
@@ -59,16 +59,6 @@ function createSvnBackend() {
         message: details.message,
         changedPaths: details.changedPaths
       };
-    },
-    async isValidCheckpoint() {
-      return true;
-    },
-    toStateValue(revision) {
-      return Number(revision);
-    },
-    fromStateValue(state) {
-      const id = state.lastReviewedId;
-      return Number.isInteger(id) ? id : null;
     }
   };
 }
@@ -99,8 +89,8 @@ function createGitBackend() {
     async getLatestChangeId(config, targetInfo) {
       return await gitClient.getLatestCommit(config, targetInfo);
     },
-    async getPendingChangeIds(config, targetInfo, startExclusive, endInclusive, limit) {
-      return await gitClient.getPendingCommits(config, targetInfo, startExclusive, endInclusive, limit);
+    async getLatestChangeIds(config, targetInfo, limit) {
+      return await gitClient.getLatestCommitIds(config, targetInfo, limit);
     },
     async getChangeDiff(config, targetInfo, commitHash) {
       return await gitClient.getCommitDiff(config, targetInfo, commitHash);
@@ -116,16 +106,6 @@ function createGitBackend() {
         message: details.message,
         changedPaths: details.changedPaths
       };
-    },
-    async isValidCheckpoint(config, targetInfo, checkpointCommit, latestCommit) {
-      return await gitClient.isValidCheckpoint(config, targetInfo, checkpointCommit, latestCommit);
-    },
-    toStateValue(commitHash) {
-      return String(commitHash);
-    },
-    fromStateValue(state) {
-      const id = state.lastReviewedId;
-      return typeof id === "string" && id ? id : null;
     }
   };
 }

@@ -124,6 +124,16 @@ export async function getPendingCommits(config, targetInfo, startExclusive, endI
   return splitLines(result.stdout).slice(0, limit);
 }
 
+export async function getLatestCommitIds(config, targetInfo, limit) {
+  const result = await runGit(
+    config,
+    ["rev-list", "-n", String(limit), "HEAD", ...buildPathArgs(targetInfo)],
+    { cwd: targetInfo.repoRootPath, trim: true }
+  );
+  // Reverse to get chronological order (oldest to newest among the latest n)
+  return splitLines(result.stdout).reverse();
+}
+
 export async function getCommitDiff(config, targetInfo, commitHash) {
   const result = await runGit(
     config,
