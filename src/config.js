@@ -214,6 +214,7 @@ export async function resolveConfig(cliArgs = {}) {
     config.target = process.cwd();
   }
 
+  config.baseDir = process.cwd();
   config.debug = Boolean(cliArgs.debug);
   config.reviewer = String(config.reviewer || "auto").toLowerCase();
   config.lang = String(config.lang || "auto").toLowerCase();
