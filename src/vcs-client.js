@@ -36,6 +36,10 @@ function createSvnBackend() {
       return `${datePrefix}-svn-r${revision}.md`;
     },
 
+    async resolveChangeIds(config, targetInfo, revString) {
+      if (!revString) return [];
+      return String(revString).split(',').map(s => s.trim()).filter(Boolean);
+    },
     async getTargetInfo(config) {
       return await svnClient.getTargetInfo(config);
     },
@@ -83,6 +87,16 @@ function createGitBackend() {
       return `${datePrefix}-git-${commitHash.slice(0, 12)}.md`;
     },
 
+    async resolveChangeIds(config, targetInfo, revString) {
+      if (!revString) return [];
+      const specs = String(revString).split(',').map(s => s.trim()).filter(Boolean);
+      const allHashes = [];
+      for (const spec of specs) {
+        const hashes = await gitClient.resolveCommits(config, targetInfo, spec);
+        allHashes.push(...hashes);
+      }
+      return [...new Set(allHashes)];
+    },
     async getTargetInfo(config) {
       return await gitClient.getTargetInfo(config);
     },
@@ -99,8 +113,8 @@ function createGitBackend() {
       const details = await gitClient.getCommitDetails(config, targetInfo, commitHash);
 
       return {
-        id: commitHash,
-        displayId: commitHash.slice(0, 12),
+        id: details.commitHash,
+        displayId: details.commitHash.slice(0, 12),
         author: details.author,
         date: details.date,
         message: details.message,

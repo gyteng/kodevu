@@ -20,6 +20,7 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
   logger.info(`Starting review for ${backend.changeName} ${displayId}`);
   progress?.update(0.05, "loading change details");
   const details = await backend.getChangeDetails(config, targetInfo, changeId);
+  const resolvedChangeId = details.id;
 
   if (details.changedPaths.length === 0) {
     progress?.update(0.7, "writing skipped report");
@@ -29,7 +30,7 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
       "No file changes were captured for this change under the configured target."
     ].join("\n");
 
-    const markdownReportFile = path.join(config.outputDir, backend.getReportFileName(changeId));
+    const markdownReportFile = path.join(config.outputDir, backend.getReportFileName(resolvedChangeId));
     const jsonReportFile = markdownReportFile.replace(/\.md$/i, ".json");
 
     if (shouldWriteFormat(config, "markdown")) {
@@ -55,7 +56,7 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
   }
 
   progress?.update(0.2, "loading diff");
-  const diffText = await backend.getChangeDiff(config, targetInfo, changeId);
+  const diffText = await backend.getChangeDiff(config, targetInfo, resolvedChangeId);
   const reviewersToTry = [config.reviewer, ...(config.fallbackReviewers || [])];
 
   let reviewer;
@@ -99,7 +100,7 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
   progress?.update(0.82, "writing report");
   logger.debug(`Token usage: input=${tokenUsage.inputTokens} output=${tokenUsage.outputTokens} total=${tokenUsage.totalTokens} source=${tokenUsage.source}`);
   const report = buildReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage);
-  const outputFile = path.join(config.outputDir, backend.getReportFileName(changeId));
+  const outputFile = path.join(config.outputDir, backend.getReportFileName(resolvedChangeId));
   const jsonOutputFile = outputFile.replace(/\.md$/i, ".json");
 
   if (shouldWriteFormat(config, "markdown")) {
@@ -156,7 +157,7 @@ export async function runReviewCycle(config) {
   let changeIdsToReview = [];
 
   if (config.rev) {
-    changeIdsToReview = [config.rev];
+    changeIdsToReview = await backend.resolveChangeIds(config, targetInfo, config.rev);
   } else {
     changeIdsToReview = await backend.getLatestChangeIds(config, targetInfo, config.last || 1);
   }

@@ -266,8 +266,8 @@ Options:
   --reviewer, -r    Reviewer (codex | gemini | copilot | auto, default: auto)
   --prompt, -p      Additional instructions or @file.txt to read from file
   --lang, -l        Output language (e.g. zh, en, auto)
-  --rev, -v         Review a specific revision or commit hash
-  --last, -n        Review the latest N revisions (default: 1)
+  --rev, -v         Review specific revision(s), hashes, branches or ranges (comma-separated)
+  --last, -n        Review the latest N revisions (ignored if --rev is provided) (default: 1)
   --output, -o      Output directory (default: ~/.kodevu)
   --format, -f      Output formats (markdown, json, comma-separated)
   --debug, -d       Print extra debug information
