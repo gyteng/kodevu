@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { initConfig, loadConfig, parseCliArgs, printHelp } from "./config.js";
+import { resolveConfig, parseCliArgs, printHelp } from "./config.js";
 import { runReviewCycle } from "./review-runner.js";
 import { logger } from "./logger.js";
 
@@ -19,19 +19,8 @@ if (cliArgs.help) {
   process.exit(0);
 }
 
-if (cliArgs.command === "init") {
-  try {
-    const createdPath = await initConfig(cliArgs.configPath);
-    console.log(`Created config: ${createdPath}`);
-    process.exit(0);
-  } catch (error) {
-    console.error(error?.stack || String(error));
-    process.exit(1);
-  }
-}
-
 try {
-  const config = await loadConfig(cliArgs.configPath, cliArgs);
+  const config = await resolveConfig(cliArgs);
   logger.init(config);
 
   if (config.reviewerWasAutoSelected) {
@@ -42,8 +31,7 @@ try {
 
   if (config.debug) {
     logger.debug(
-      `Loaded config: ${JSON.stringify({
-        configPath: config.configPath,
+      `Resolved config: ${JSON.stringify({
         reviewer: config.reviewer,
         reviewerCommandPath: config.reviewerCommandPath,
         reviewerWasAutoSelected: config.reviewerWasAutoSelected,
@@ -59,7 +47,6 @@ try {
   await runReviewCycle(config);
   logger.info("Session completed successfully.");
 } catch (error) {
-  // If config was loaded, logger might be initialized, otherwise it will fall back to stderr
   logger.error("Session failed with error", error);
   process.exitCode = 1;
 }

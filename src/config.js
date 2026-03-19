@@ -6,7 +6,6 @@ import { findCommandOnPath } from "./shell.js";
 const defaultStorageDir = path.join(os.homedir(), ".kodevu");
 const SUPPORTED_REVIEWERS = ["codex", "gemini", "copilot"];
 
-
 const defaultConfig = {
   reviewer: "auto",
   target: "",
@@ -21,61 +20,36 @@ const defaultConfig = {
   last: 0
 };
 
-const configTemplate = {
-  target: "C:/path/to/your/repository-or-subdirectory",
-  reviewer: defaultConfig.reviewer,
-  lang: defaultConfig.lang,
-  prompt: defaultConfig.prompt,
-  outputDir: "~/.kodevu",
-  logsDir: "~/.kodevu/logs",
-  commandTimeoutMs: defaultConfig.commandTimeoutMs,
-  maxRevisionsPerRun: defaultConfig.maxRevisionsPerRun,
-  outputFormats: defaultConfig.outputFormats,
-  rev: "",
-  last: 1
+const ENV_MAP = {
+  KODEVU_REVIEWER: "reviewer",
+  KODEVU_LANG: "lang",
+  KODEVU_OUTPUT_DIR: "outputDir",
+  KODEVU_PROMPT: "prompt",
+  KODEVU_TIMEOUT: "commandTimeoutMs",
+  KODEVU_MAX_REVISIONS: "maxRevisionsPerRun",
+  KODEVU_FORMATS: "outputFormats"
 };
 
-function resolveConfigPath(baseDir, value) {
-  if (!value) {
-    return value;
-  }
-
-  if (typeof value !== "string") {
-    return path.resolve(baseDir, String(value));
-  }
-
-  if (value === "~") {
-    return os.homedir();
-  }
-
+function resolvePath(value) {
+  if (!value) return value;
+  if (value === "~") return os.homedir();
   if (value.startsWith("~/") || value.startsWith("~\\")) {
     return path.join(os.homedir(), value.slice(2));
   }
-
-  return path.isAbsolute(value) ? value : path.resolve(baseDir, value);
+  return path.isAbsolute(value) ? value : path.resolve(process.cwd(), value);
 }
 
-
-function normalizeOutputFormats(outputFormats, loadedConfigPath) {
+function normalizeOutputFormats(outputFormats) {
   const source = outputFormats == null ? ["markdown"] : outputFormats;
-  const values = Array.isArray(source) ? source : [source];
+  const values = Array.isArray(source) ? source : String(source).split(",");
   const normalized = [...new Set(values.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean))];
   const supported = ["markdown", "json"];
   const invalid = normalized.filter((item) => !supported.includes(item));
 
   if (invalid.length > 0) {
-    throw new Error(
-      `"outputFormats" contains unsupported value(s): ${invalid.join(", ")}. Use any of: ${supported.join(", ")}${
-        loadedConfigPath ? ` in ${loadedConfigPath}` : ""
-      }`
-    );
+    throw new Error(`Unsupported output format(s): ${invalid.join(", ")}. Use: ${supported.join(", ")}`);
   }
-
-  if (normalized.length === 0) {
-    throw new Error(`"outputFormats" must include at least one format${loadedConfigPath ? ` in ${loadedConfigPath}` : ""}`);
-  }
-
-  return normalized;
+  return normalized.length === 0 ? ["markdown"] : normalized;
 }
 
 function detectLanguage() {
@@ -88,46 +62,28 @@ function detectLanguage() {
     }
   })();
 
-  // On Windows, the LANG environment variable is often set to 'en_US.UTF-8' by default
-  // in many shells (like Git Bash/MSYS2), regardless of the actual OS display language.
-  // We prefer the system locale (Intl) on Windows if it's Chinese.
-  if (os.platform() === "win32" && intlLocale.startsWith("zh")) {
-    return "zh";
-  }
-
-  if (envLang) {
-    if (envLang.startsWith("zh")) return "zh";
-    if (envLang.startsWith("en")) return "en";
-    return envLang.split(/[._-]/)[0];
-  }
-
-  if (intlLocale) {
-    if (intlLocale.startsWith("zh")) return "zh";
-    if (intlLocale.startsWith("en")) return "en";
-    return intlLocale.split("-")[0];
-  }
-
+  if (os.platform() === "win32" && intlLocale.startsWith("zh")) return "zh";
+  if (envLang.startsWith("zh")) return "zh";
+  if (envLang.startsWith("en")) return "en";
+  if (envLang) return envLang.split(/[._-]/)[0];
+  if (intlLocale.startsWith("zh")) return "zh";
+  if (intlLocale.startsWith("en")) return "en";
+  if (intlLocale) return intlLocale.split("-")[0];
   return "en";
 }
 
-async function resolveAutoReviewers(debug, loadedConfigPath) {
+async function resolveAutoReviewers(debug) {
   const availableReviewers = [];
-
   for (const reviewerName of SUPPORTED_REVIEWERS) {
     const commandPath = await findCommandOnPath(reviewerName, { debug });
-    if (commandPath) {
-      availableReviewers.push({ reviewerName, commandPath });
-    }
+    if (commandPath) availableReviewers.push({ reviewerName, commandPath });
   }
 
   if (availableReviewers.length === 0) {
-    throw new Error(
-      `No reviewer CLI was found in PATH for "reviewer": "auto". Install one of: ${SUPPORTED_REVIEWERS.join(", ")}${
-        loadedConfigPath ? ` (${loadedConfigPath})` : ""
-      }`
-    );
+    throw new Error(`No reviewer CLI found in PATH. Install one of: ${SUPPORTED_REVIEWERS.join(", ")}`);
   }
 
+  // Shuffle for variety
   for (let i = availableReviewers.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [availableReviewers[i], availableReviewers[j]] = [availableReviewers[j], availableReviewers[i]];
@@ -138,9 +94,6 @@ async function resolveAutoReviewers(debug, loadedConfigPath) {
 
 export function parseCliArgs(argv) {
   const args = {
-    command: "run",
-    configPath: "config.json",
-    configExplicitlySet: false,
     target: "",
     debug: false,
     help: false,
@@ -149,17 +102,12 @@ export function parseCliArgs(argv) {
     prompt: "",
     rev: "",
     last: "",
-    commandExplicitlySet: false
+    outputDir: "",
+    outputFormats: ""
   };
 
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
-
-    if (value === "init" && !args.commandExplicitlySet && index === 0) {
-      args.command = "init";
-      args.commandExplicitlySet = true;
-      continue;
-    }
 
     if (value === "--help" || value === "-h") {
       args.help = true;
@@ -171,68 +119,59 @@ export function parseCliArgs(argv) {
       continue;
     }
 
-    if (value === "--config" || value === "-c") {
-      const configPath = argv[index + 1];
-      if (!configPath || configPath.startsWith("-")) {
-        throw new Error(`Missing value for ${value}`);
-      }
-      args.configPath = configPath;
-      args.configExplicitlySet = true;
-      index += 1;
-      continue;
-    }
+    const nextValue = argv[index + 1];
+    const hasNextValue = nextValue && !nextValue.startsWith("-");
 
     if (value === "--reviewer" || value === "-r") {
-      const reviewer = argv[index + 1];
-      if (!reviewer || reviewer.startsWith("-")) {
-        throw new Error(`Missing value for ${value}`);
-      }
-      args.reviewer = reviewer;
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.reviewer = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--prompt" || value === "-p") {
-      const prompt = argv[index + 1];
-      if (!prompt || prompt.startsWith("-")) {
-        throw new Error(`Missing value for ${value}`);
-      }
-      args.prompt = prompt;
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.prompt = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--lang" || value === "-l") {
-      const lang = argv[index + 1];
-      if (!lang || lang.startsWith("-")) {
-        throw new Error(`Missing value for ${value}`);
-      }
-      args.lang = lang;
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.lang = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--rev" || value === "-v") {
-      const rev = argv[index + 1];
-      if (!rev || rev.startsWith("-")) {
-        throw new Error(`Missing value for ${value}`);
-      }
-      args.rev = rev;
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.rev = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--last" || value === "-n") {
-      const last = argv[index + 1];
-      if (!last || last.startsWith("-")) {
-        throw new Error(`Missing value for ${value}`);
-      }
-      args.last = last;
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.last = nextValue;
       index += 1;
       continue;
     }
 
-    if (!value.startsWith("-") && args.command === "run" && !args.target) {
+    if (value === "--output" || value === "-o") {
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.outputDir = nextValue;
+      index += 1;
+      continue;
+    }
+
+    if (value === "--format" || value === "-f") {
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.outputFormats = nextValue;
+      index += 1;
+      continue;
+    }
+
+    if (!value.startsWith("-") && !args.target) {
       args.target = value;
       continue;
     }
@@ -240,98 +179,76 @@ export function parseCliArgs(argv) {
     throw new Error(`Unexpected argument: ${value}`);
   }
 
-  delete args.commandExplicitlySet;
   return args;
 }
 
-export async function loadConfig(configPath, cliArgs = {}) {
-  const absoluteConfigPath = path.resolve(configPath);
-  let loadedConfig = {};
-  let loadedConfigPath = null;
-  let baseDir = process.cwd();
+export async function resolveConfig(cliArgs = {}) {
+  const config = { ...defaultConfig };
 
-  try {
-    const raw = await fs.readFile(absoluteConfigPath, "utf8");
-    loadedConfig = JSON.parse(raw);
-    loadedConfigPath = absoluteConfigPath;
-    baseDir = path.dirname(absoluteConfigPath);
-  } catch (error) {
-    if (!(error?.code === "ENOENT" && !cliArgs.configExplicitlySet)) {
-      throw error;
+  // 1. Merge Environment Variables
+  for (const [envVar, configKey] of Object.entries(ENV_MAP)) {
+    if (process.env[envVar] !== undefined) {
+      config[configKey] = process.env[envVar];
     }
   }
 
-  const config = {
-    ...defaultConfig,
-    ...loadedConfig
+  // 2. Merge CLI Arguments
+  const cliMapping = {
+    target: "target",
+    reviewer: "reviewer",
+    prompt: "prompt",
+    lang: "lang",
+    rev: "rev",
+    last: "last",
+    outputDir: "outputDir",
+    outputFormats: "outputFormats"
   };
 
-  if (cliArgs.target) {
-    config.target = cliArgs.target;
-  }
-
-  if (cliArgs.reviewer) {
-    config.reviewer = cliArgs.reviewer;
-  }
-
-  if (cliArgs.prompt) {
-    config.prompt = cliArgs.prompt;
-  }
-
-  if (cliArgs.lang) {
-    config.lang = cliArgs.lang;
-  }
-
-  if (cliArgs.rev) {
-    config.rev = cliArgs.rev;
-  }
-
-  if (cliArgs.last) {
-    config.last = cliArgs.last;
+  for (const [cliKey, configKey] of Object.entries(cliMapping)) {
+    if (cliArgs[cliKey]) {
+      config[configKey] = cliArgs[cliKey];
+    }
   }
 
   if (!config.target) {
-    throw new Error('Missing target. Pass `npx kodevu <repo-path>` or set "target" in config.json.');
+    config.target = process.cwd();
   }
 
   config.debug = Boolean(cliArgs.debug);
   config.reviewer = String(config.reviewer || "auto").toLowerCase();
   config.lang = String(config.lang || "auto").toLowerCase();
-
   config.resolvedLang = config.lang === "auto" ? detectLanguage() : config.lang;
 
+  // Handle @file prompt
+  if (config.prompt.startsWith("@")) {
+    const promptPath = resolvePath(config.prompt.slice(1));
+    try {
+      config.prompt = await fs.readFile(promptPath, "utf8");
+    } catch (err) {
+      throw new Error(`Failed to read prompt file: ${promptPath} (${err.message})`);
+    }
+  }
+
   if (config.reviewer === "auto") {
-    const availableReviewers = await resolveAutoReviewers(config.debug, loadedConfigPath);
+    const availableReviewers = await resolveAutoReviewers(config.debug);
     const selectedReviewer = availableReviewers[0];
     config.reviewer = selectedReviewer.reviewerName;
     config.reviewerCommandPath = selectedReviewer.commandPath;
     config.fallbackReviewers = availableReviewers.map(r => r.reviewerName).slice(1);
     config.reviewerWasAutoSelected = true;
   } else if (!SUPPORTED_REVIEWERS.includes(config.reviewer)) {
-    throw new Error(
-      `"reviewer" must be one of "codex", "gemini", "copilot", or "auto"${loadedConfigPath ? ` in ${loadedConfigPath}` : ""}`
-    );
+    throw new Error(`"reviewer" must be one of: ${SUPPORTED_REVIEWERS.join(", ")}, or "auto"`);
   }
 
-  config.configPath = loadedConfigPath;
-  config.baseDir = baseDir;
-  config.outputDir = resolveConfigPath(config.baseDir, config.outputDir);
-  config.logsDir = resolveConfigPath(config.baseDir, config.logsDir);
+  config.outputDir = resolvePath(config.outputDir);
+  config.logsDir = path.join(config.outputDir, "logs");
   config.maxRevisionsPerRun = Number(config.maxRevisionsPerRun);
   config.commandTimeoutMs = Number(config.commandTimeoutMs);
   config.last = Number(config.last);
-  config.outputFormats = normalizeOutputFormats(config.outputFormats, loadedConfigPath);
+  config.outputFormats = normalizeOutputFormats(config.outputFormats);
 
   if (!config.rev && (isNaN(config.last) || config.last <= 0)) {
     config.last = 1;
-  }
-
-  if (!Number.isInteger(config.maxRevisionsPerRun) || config.maxRevisionsPerRun <= 0) {
-    throw new Error(`"maxRevisionsPerRun" must be a positive integer${loadedConfigPath ? ` in ${loadedConfigPath}` : ""}`);
-  }
-
-  if (!Number.isInteger(config.commandTimeoutMs) || config.commandTimeoutMs <= 0) {
-    throw new Error(`"commandTimeoutMs" must be a positive integer${loadedConfigPath ? ` in ${loadedConfigPath}` : ""}`);
   }
 
   return config;
@@ -341,44 +258,25 @@ export function printHelp() {
   console.log(`Kodevu
 
 Usage:
-  kodevu init
-  npx kodevu init
-  kodevu <target> [--debug]
-  npx kodevu <target> [--debug]
-  kodevu [--config config.json]
-  npx kodevu [--config config.json]
+  npx kodevu [target] [options]
 
 Options:
-  --config, -c   Optional config json path. If omitted, ./config.json is loaded only when present
-  --reviewer, -r Override reviewer (codex | gemini | copilot | auto)
-  --prompt, -p   Override prompt
-  --lang, -l     Override output language (e.g. zh, en, auto)
-  --rev, -v      Review a specific revision or commit hash
-  --last, -n     Review the latest N revisions (default: 1)
-  --debug, -d    Print extra debug information to the console
-  --help, -h     Show help
+  --target, <path>  Target repository path (default: current directory)
+  --reviewer, -r    Reviewer (codex | gemini | copilot | auto, default: auto)
+  --prompt, -p      Additional instructions or @file.txt to read from file
+  --lang, -l        Output language (e.g. zh, en, auto)
+  --rev, -v         Review a specific revision or commit hash
+  --last, -n        Review the latest N revisions (default: 1)
+  --output, -o      Output directory (default: ~/.kodevu)
+  --format, -f      Output formats (markdown, json, comma-separated)
+  --debug, -d       Print extra debug information
+  --help, -h        Show help
 
-Config highlights:
-  reviewer       codex | gemini | copilot | auto
-  target         Repository target path (Git) or SVN working copy / URL; CLI positional target overrides config
-  outputFormats  ["markdown"] by default; set to include "json" when needed
+Environment Variables:
+  KODEVU_REVIEWER   Default reviewer
+  KODEVU_LANG       Default language
+  KODEVU_OUTPUT_DIR Default output directory
+  KODEVU_PROMPT     Default prompt text
+  KODEVU_TIMEOUT    Reviewer timeout in ms
 `);
-}
-
-export async function initConfig(targetPath = "config.json") {
-  const absoluteTargetPath = path.resolve(targetPath);
-
-  await fs.mkdir(path.dirname(absoluteTargetPath), { recursive: true });
-
-  const content = JSON.stringify(configTemplate, null, 2) + "\n";
-  try {
-    await fs.writeFile(absoluteTargetPath, content, { flag: "wx" });
-  } catch (error) {
-    if (error?.code === "EEXIST") {
-      throw new Error(`Config file already exists: ${absoluteTargetPath}`);
-    }
-    throw error;
-  }
-
-  return absoluteTargetPath;
 }
