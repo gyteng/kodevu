@@ -13,14 +13,41 @@ export function getReviewWorkspaceRoot(config, backend, targetInfo) {
   return config.baseDir;
 }
 
+function getLanguageDisplayName(lang) {
+  if (!lang) return "English";
+  const low = lang.toLowerCase();
+  if (low.startsWith("zh")) {
+    if (low === "zh-tw" || low === "zh-hk") return "Traditional Chinese (繁體中文)";
+    return "Simplified Chinese (简体中文)";
+  }
+  if (low === "jp" || low.startsWith("ja")) return "Japanese (日本語)";
+  if (low === "kr" || low.startsWith("ko")) return "Korean (한국어)";
+  if (low === "fr") return "French (Français)";
+  if (low === "de") return "German (Deutsch)";
+  if (low === "es") return "Spanish (Español)";
+  if (low === "it") return "Italian (Italiano)";
+  if (low === "ru") return "Russian (Русский)";
+  return lang;
+}
+
 export function buildPrompt(config, backend, targetInfo, details, reviewDiffPayload) {
   const fileList = details.changedPaths.map((item) => `${item.action} ${item.relativePath}`).join("\n");
   const workspaceRoot = getReviewWorkspaceRoot(config, backend, targetInfo);
   const canReadRelatedFiles = backend.kind === "git" || Boolean(targetInfo.workingCopyPath);
 
-  const langInstruction = config.resolvedLang === "zh"
-    ? "Please use Simplified Chinese for your response."
-    : `Please use ${config.resolvedLang || "English"} for your response.`;
+  const langName = getLanguageDisplayName(config.resolvedLang);
+  const lowLang = (config.resolvedLang || "").toLowerCase();
+  let langInstruction = `IMPORTANT: Your entire response MUST be in ${langName}. All explanations, comments, and structure should strictly follow the ${langName} language rules.`;
+
+  if (lowLang.startsWith("zh")) {
+    if (lowLang === "zh-tw" || lowLang === "zh-hk") {
+      langInstruction += "\n請務必使用繁體中文進行回覆，所有的審查評論和分析都必須以繁體中文呈現。";
+    } else {
+      langInstruction += "\n请务必使用简体中文进行回复，所有的审查评论和分析都必须以简体中文呈现。";
+    }
+  }
+
+
 
   return [
     CORE_REVIEW_INSTRUCTION,
@@ -41,8 +68,18 @@ export function buildPrompt(config, backend, targetInfo, details, reviewDiffPayl
     `Commit message:\n${details.message || "(empty)"}`,
     reviewDiffPayload.wasTruncated
       ? `Diff delivery note: the diff was truncated before being sent to the reviewer to stay within configured size limits. Original diff size was ${reviewDiffPayload.originalLineCount} lines / ${reviewDiffPayload.originalCharCount} chars, and the included excerpt is ${reviewDiffPayload.outputLineCount} lines / ${reviewDiffPayload.outputCharCount} chars. Use the changed file list and inspect related workspace files when needed.`
-      : `Diff delivery note: the full diff is included. Size is ${reviewDiffPayload.originalLineCount} lines / ${reviewDiffPayload.originalCharCount} chars.`
+      : `Diff delivery note: the full diff is included. Size is ${reviewDiffPayload.originalLineCount} lines / ${reviewDiffPayload.originalCharCount} chars.`,
+    `--- IMPORTANT LANGUAGE RULE ---\nYou MUST respond strictly in ${langName}. No other language should be used for the explanation and comments.${
+      lowLang.startsWith("zh")
+        ? lowLang === "zh-tw" || lowLang === "zh-hk"
+          ? "\n請務必完全使用繁體中文進行回覆，所有的審查分析、注釋和總結都必須使用繁體中文。"
+          : "\n请务必完全使用简体中文进行回复，所有的审查分析、注释和总结都必须使用简体中文。"
+        : ""
+    }`
+
   ].filter(Boolean).join("\n\n");
+
+
 }
 
 export function formatTokenUsage(tokenUsage) {
