@@ -49,6 +49,7 @@ npx kodevu [target] [options]
 - `--output, -o`: Report output directory (default: `~/.kodevu`).
 - `--format, -f`: Output formats (e.g., `markdown`, `json`, or `markdown,json`).
 - `--debug, -d`: Print debug information.
+- `--version, -V`: Print the current version and exit.
 
 ### Environment Variables
 

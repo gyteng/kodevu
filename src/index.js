@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { resolveConfig, parseCliArgs, printHelp } from "./config.js";
+import { resolveConfig, parseCliArgs, printHelp, printVersion } from "./config.js";
 import { runReviewCycle } from "./review-runner.js";
 import { logger } from "./logger.js";
 
@@ -16,6 +16,11 @@ try {
 
 if (cliArgs.help) {
   printHelp();
+  process.exit(0);
+}
+
+if (cliArgs.version) {
+  printVersion();
   process.exit(0);
 }
 

@@ -101,6 +101,7 @@ export function parseCliArgs(argv) {
     target: "",
     debug: false,
     help: false,
+    version: false,
     reviewer: "",
     lang: "",
     prompt: "",
@@ -115,6 +116,11 @@ export function parseCliArgs(argv) {
 
     if (value === "--help" || value === "-h") {
       args.help = true;
+      continue;
+    }
+
+    if (value === "--version" || value === "-V") {
+      args.version = true;
       continue;
     }
 
@@ -276,6 +282,7 @@ Options:
   --format, -f      Output formats (markdown, json, comma-separated)
   --debug, -d       Print extra debug information
   --help, -h        Show help
+  --version, -V     Show version
 
 Environment Variables:
   KODEVU_REVIEWER   Default reviewer
@@ -284,4 +291,8 @@ Environment Variables:
   KODEVU_PROMPT     Default prompt text
   KODEVU_TIMEOUT    Reviewer timeout in ms
 `);
+}
+
+export function printVersion() {
+  console.log(packageVersion);
 }
