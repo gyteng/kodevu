@@ -258,6 +258,7 @@ export function shouldWriteFormat(config, format) {
 }
 
 export function buildReport(config, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage) {
+  const stderrText = reviewerResult.stderr?.trim();
   const lines = [
     `# ${backend.displayName} Review Report: ${details.displayId}`,
     "",
@@ -299,6 +300,10 @@ export function buildReport(config, backend, targetInfo, details, diffPayloads, 
     "```diff",
     diffPayloads.report.text.trim() || "(empty diff)",
     "```",
+    "",
+    "## Reviewer Diagnostics",
+    "",
+    stderrText ? "```text\n" + stderrText + "\n```" : "_No stderr output._",
     "",
     `## ${reviewer.responseSectionTitle}`,
     "",
@@ -351,6 +356,7 @@ export function buildJsonReport(config, backend, targetInfo, details, diffPayloa
       }
     },
     diff: diffPayloads.report.text.trim(),
+    reviewerDiagnostics: reviewerResult.stderr?.trim() || "",
     reviewerResponse: reviewerResult.message?.trim() ? reviewerResult.message.trim() : reviewer.emptyResponseText
   };
 }

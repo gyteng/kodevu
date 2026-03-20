@@ -76,7 +76,17 @@ export const REVIEWERS = {
     responseSectionTitle: "Copilot Response",
     emptyResponseText: "_No final response returned from copilot._",
     async run(config, workingDir, promptText, diffText) {
-      const execResult = await runCommand("copilot", ["-p", promptText], {
+      const args = [
+        "-p",
+        promptText,
+        "-s",
+        "--no-color",
+        "--no-ask-user",
+        "--allow-all-tools",
+        "--add-dir",
+        workingDir
+      ];
+      const execResult = await runCommand("copilot", args, {
         cwd: workingDir,
         input: ["Unified diff:", diffText].join("\n\n"),
         allowFailure: true,
