@@ -105,6 +105,25 @@ export async function isValidCheckpoint(config, targetInfo, checkpointCommit, la
   return ancestorResult.code === 0;
 }
 
+export async function resolveCommits(config, targetInfo, revSpec) {
+  const result = await runGit(
+    config,
+    ["rev-list", revSpec],
+    { cwd: targetInfo.repoRootPath, trim: true, allowFailure: true }
+  );
+
+  if (result.code !== 0) {
+    // Attempt fallback to a single hash resolution if rev-list fails (e.g. for non-standard specs)
+    const single = await runGit(config, ["rev-parse", revSpec], {
+      cwd: targetInfo.repoRootPath, trim: true, allowFailure: true
+    });
+    if (single.code === 0) return [single.stdout.trim()];
+    throw new Error(`Failed to resolve Git revision: ${revSpec}`);
+  }
+
+  return splitLines(result.stdout);
+}
+
 export async function getPendingCommits(config, targetInfo, startExclusive, endInclusive, limit) {
   const args = ["rev-list", "--reverse"];
 
