@@ -76,28 +76,50 @@ export const REVIEWERS = {
     responseSectionTitle: "Copilot Response",
     emptyResponseText: "_No final response returned from copilot._",
     async run(config, workingDir, promptText, diffText) {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "kodevu-copilot-"));
+      const reviewInputFile = path.join(tempDir, "review-input.md");
+      const copilotPrompt = [
+        `Use the file-reading tools to open this exact file path: ${reviewInputFile}`,
+        "That file contains the full review instructions and the unified diff to review.",
+        "Follow the instructions from that file exactly and output the final review directly.",
+        "Do not ask clarifying questions. Do not mention tool usage. Do not say you are ready.",
+        "Start immediately with the review content."
+      ].join("\n");
       const args = [
         "-p",
-        promptText,
+        copilotPrompt,
         "-s",
         "--no-color",
         "--no-ask-user",
+        "--no-custom-instructions",
         "--allow-all-tools",
         "--add-dir",
-        workingDir
+        workingDir,
+        "--add-dir",
+        tempDir
       ];
-      const execResult = await runCommand("copilot", args, {
-        cwd: workingDir,
-        input: ["Unified diff:", diffText].join("\n\n"),
-        allowFailure: true,
-        timeoutMs: config.commandTimeoutMs,
-        debug: config.debug
-      });
 
-      return {
-        ...execResult,
-        message: execResult.stdout
-      };
+      try {
+        await fs.writeFile(
+          reviewInputFile,
+          [promptText, "### Unified Diff", "```diff", diffText, "```"].join("\n\n"),
+          "utf8"
+        );
+
+        const execResult = await runCommand("copilot", args, {
+          cwd: workingDir,
+          allowFailure: true,
+          timeoutMs: config.commandTimeoutMs,
+          debug: config.debug
+        });
+
+        return {
+          ...execResult,
+          message: execResult.stdout
+        };
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
     }
   }
 };

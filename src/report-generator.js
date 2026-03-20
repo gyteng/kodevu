@@ -208,6 +208,7 @@ export function buildPrompt(config, backend, targetInfo, details, reviewDiffPayl
     canReadRelatedFiles
       ? `${getPhrase("workspaceRoot", lang)} ${workspaceRoot}\n${getPhrase("besidesDiff", lang)}`
       : getPhrase("noWorkspace", lang),
+    getPhrase("reviewFromDiff", lang),
     getPhrase("fileRefs", lang),
     getPhrase("langRule", lang, { langName }),
     getPhrase("outputDirective", lang)
