@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { formatDate } from "./utils.js";
 
 class Logger {
   constructor() {
@@ -18,7 +19,7 @@ class Logger {
         if (!fs.existsSync(config.logsDir)) {
           fs.mkdirSync(config.logsDir, { recursive: true });
         }
-        const date = new Date().toISOString().split("T")[0];
+        const date = formatDate(new Date()).split(" ")[0];
         this.logFile = path.join(config.logsDir, `run-${date}.log`);
         
         // Simple rotation: Clean up logs older than 7 days
@@ -57,7 +58,7 @@ class Logger {
   }
 
   _log(level, message) {
-    const timestamp = new Date().toISOString();
+    const timestamp = formatDate(new Date());
     const logLine = `[${timestamp}] [${level}] ${message}`;
 
     // Write to file

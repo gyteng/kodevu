@@ -1,3 +1,4 @@
+import { formatDate } from "./utils.js";
 export function getCoreReviewInstruction(lang) {
   const lowLang = (lang || "").toLowerCase();
   if (lowLang.startsWith("zh")) {
@@ -176,7 +177,7 @@ export function buildPrompt(config, backend, targetInfo, details, reviewDiffPayl
     `${getPhrase("repoType", lang)}: ${backend.displayName}`,
     `${getPhrase("changeId", lang)}: ${details.displayId}`,
     `${getPhrase("author", lang)}: ${details.author}`,
-    `${getPhrase("date", lang)}: ${details.date || "unknown"}`,
+    `${getPhrase("date", lang)}: ${formatDate(details.date) || "unknown"}`,
     `${getPhrase("changedFiles", lang)}:\n${fileList || "(none)"}`,
     `${getPhrase("commitMessage", lang)}:\n${details.message || "(empty)"}`
   ].join("\n");
@@ -260,8 +261,8 @@ export function buildReport(config, backend, targetInfo, details, diffPayloads, 
     `- Target: \`${targetInfo.targetDisplay || config.target}\``,
     `- Change ID: \`${details.displayId}\``,
     `- Author: \`${details.author}\``,
-    `- Commit Date: \`${details.date || "unknown"}\``,
-    `- Generated At: \`${new Date().toISOString()}\``,
+    `- Commit Date: \`${formatDate(details.date)}\``,
+    `- Generated At: \`${formatDate(new Date())}\``,
     `- Reviewer: \`${reviewer.displayName}\``,
     `- Reviewer Exit Code: \`${reviewerResult.code}\``,
     `- Reviewer Timed Out: \`${reviewerResult.timedOut ? "yes" : "no"}\``,
@@ -309,8 +310,8 @@ export function buildJsonReport(config, backend, targetInfo, details, diffPayloa
     target: targetInfo.targetDisplay || config.target,
     changeId: details.displayId,
     author: details.author,
-    commitDate: details.date || "unknown",
-    generatedAt: new Date().toISOString(),
+    commitDate: formatDate(details.date),
+    generatedAt: formatDate(new Date()),
     reviewer: {
       name: reviewer.displayName,
       exitCode: reviewerResult.code,

@@ -32,3 +32,25 @@ export function countLines(text) {
   }
   return text.split(/\r?\n/).length;
 }
+
+export function formatDate(dateInput) {
+  if (!dateInput || dateInput === "unknown") return "unknown";
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return dateInput;
+
+  const offsetMinutes = -d.getTimezoneOffset();
+  const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+  const offsetMins = Math.abs(offsetMinutes) % 60;
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+
+  const pad = (n) => String(n).padStart(2, "0");
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  const seconds = pad(d.getSeconds());
+  const offset = `${sign}${pad(offsetHours)}:${pad(offsetMins)}`;
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} ${offset}`;
+}

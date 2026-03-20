@@ -5,7 +5,8 @@ import { logger } from "./logger.js";
 import {
   ensureDir,
   writeTextFile,
-  writeJsonFile
+  writeJsonFile,
+  formatDate
 } from "./utils.js";
 import {
   shouldWriteFormat,
@@ -42,7 +43,7 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
         repositoryType: backend.displayName,
         target: targetInfo.targetDisplay || config.target,
         changeId: details.displayId,
-        generatedAt: new Date().toISOString(),
+        generatedAt: formatDate(new Date()),
         skipped: true,
         message: "No file changes were captured for this change under the configured target."
       });
