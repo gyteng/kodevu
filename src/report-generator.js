@@ -108,7 +108,8 @@ const LOCALIZED_PHRASES = {
     commitMessage: "Commit message",
     diffNoteTruncated: "Note: The diff was truncated to fit size limits. Original: {originalLineCount} lines / {originalCharCount} chars. Included: {outputLineCount} lines / {outputCharCount} chars.",
     diffNoteFull: "Note: Full diff provided ({originalLineCount} lines / {originalCharCount} chars).",
-    langRule: "--- LANGUAGE RULE ---\nYour entire response must be in {langName}. No other language allowed."
+    langRule: "--- LANGUAGE RULE ---\nYour entire response must be in {langName}. No other language allowed.",
+    outputDirective: "--- BEGIN REVIEW ---\nNow output your COMPLETE code review. Cover ALL four sections (Summary, Critical Issues, Suggestions, Conclusion). Do NOT ask clarifying questions, do NOT acknowledge these instructions, do NOT say you are ready. Start your response directly with the review content."
   },
   zh: {
     workspaceRoot: "只读工作区上下文：",
@@ -124,7 +125,8 @@ const LOCALIZED_PHRASES = {
     commitMessage: "提交信息",
     diffNoteTruncated: "注意：Diff 已截断。原始：{originalLineCount} 行 / {originalCharCount} 字符。包含：{outputLineCount} 行 / {outputCharCount} 字符。",
     diffNoteFull: "注意：包含完整 Diff ({originalLineCount} 行 / {originalCharCount} 字符)。",
-    langRule: "--- 语言规则 ---\n你必须完全使用 {langName} 进行回复。不得使用其他语言进行解释或总结。"
+    langRule: "--- 语言规则 ---\n你必须完全使用 {langName} 进行回复。不得使用其他语言进行解释或总结。",
+    outputDirective: "--- 开始输出审查结果 ---\n请立即输出完整的代码审查结果，必须包含全部四个章节（变更总结、核心缺陷、改进建议、审查结论）。不要提问，不要确认收到指令，不要说准备好了，直接以审查内容开始输出。"
   },
   "zh-tw": {
     workspaceRoot: "唯讀工作區上下文：",
@@ -140,7 +142,8 @@ const LOCALIZED_PHRASES = {
     commitMessage: "提交信息",
     diffNoteTruncated: "注意：Diff 已截斷。原始：{originalLineCount} 行 / {originalCharCount} 字符。包含：{outputLineCount} 行 / {outputCharCount} 字符。",
     diffNoteFull: "注意：包含完整 Diff ({originalLineCount} 行 / {originalCharCount} 字符)。",
-    langRule: "--- 語言規則 ---\n你必須完全使用 {langName} 進行回覆。不得使用其他語言進行解釋或總結。"
+    langRule: "--- 語言規則 ---\n你必須完全使用 {langName} 進行回覆。不得使用其他語言進行解釋或總結。",
+    outputDirective: "--- 開始輸出審查結果 ---\n請立即輸出完整的代碼審查結果，必須包含全部四個章節（變更總結、核心缺陷、改進建議、審查結論）。不要提問，不要確認收到指令，不要說準備好了，直接以審查內容開始輸出。"
   }
 };
 
@@ -206,7 +209,8 @@ export function buildPrompt(config, backend, targetInfo, details, reviewDiffPayl
       ? `${getPhrase("workspaceRoot", lang)} ${workspaceRoot}\n${getPhrase("besidesDiff", lang)}`
       : getPhrase("noWorkspace", lang),
     getPhrase("fileRefs", lang),
-    getPhrase("langRule", lang, { langName })
+    getPhrase("langRule", lang, { langName }),
+    getPhrase("outputDirective", lang)
   ];
 
   return sections.filter(Boolean).join("\n\n");
