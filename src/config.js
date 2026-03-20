@@ -1,7 +1,11 @@
 import fs from "node:fs/promises";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { findCommandOnPath } from "./shell.js";
+
+const require = createRequire(import.meta.url);
+const { version: packageVersion } = require("../package.json");
 
 const defaultStorageDir = path.join(os.homedir(), ".kodevu");
 const SUPPORTED_REVIEWERS = ["codex", "gemini", "copilot"];
@@ -256,7 +260,7 @@ export async function resolveConfig(cliArgs = {}) {
 }
 
 export function printHelp() {
-  console.log(`Kodevu
+  console.log(`Kodevu v${packageVersion}
 
 Usage:
   npx kodevu [target] [options]
