@@ -2,6 +2,9 @@ import spawn from "cross-spawn";
 import iconv from "iconv-lite";
 import { logger } from "./logger.js";
 
+function shellEscape(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
 
 function summarizeOutput(text) {
   if (!text) {
@@ -17,21 +20,35 @@ export async function runCommand(command, args = [], options = {}) {
     cwd,
     env,
     input,
+    stdinFile,
     encoding = "utf8",
     allowFailure = false,
     timeoutMs = 0,
     trim = false,
-    debug = false
+    debug = false,
+    pty = false
   } = options;
 
   logger.debug(
     `run: ${command} ${args.join(" ")}${cwd ? ` | cwd=${cwd}` : ""}${timeoutMs > 0 ? ` | timeoutMs=${timeoutMs}` : ""}${
       input ? ` | input=${summarizeOutput(input)}` : ""
-    }`
+    }${pty ? " | pty=true" : ""}`
   );
 
+  if (input && stdinFile) {
+    throw new Error("runCommand accepts either input or stdinFile, but not both");
+  }
+
+  const spawnCommand = pty ? "script" : command;
+  const ptyCommand = stdinFile
+    ? `${[command, ...args].map(shellEscape).join(" ")} < ${shellEscape(stdinFile)}`
+    : [command, ...args].map(shellEscape).join(" ");
+  const spawnArgs = pty
+    ? ["--quiet", "--flush", "--return", "--echo", "never", "--command", ptyCommand, "/dev/null"]
+    : args;
+
   return await new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawn(spawnCommand, spawnArgs, {
       cwd,
       env: {
         ...process.env,
@@ -74,7 +91,7 @@ export async function runCommand(command, args = [], options = {}) {
 
       const level = (result.code !== 0 || result.timedOut) && !allowFailure ? "ERROR" : "DEBUG";
       const exitMsg = `exit: ${command} code=${result.code} timedOut=${result.timedOut} stdout=${summarizeOutput(result.stdout)} stderr=${summarizeOutput(result.stderr)}`;
-      
+
       if (level === "ERROR") {
         logger.error(exitMsg);
       } else {
