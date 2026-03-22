@@ -1,6 +1,6 @@
 {
   "name": "kodevu",
-  "version": "0.1.43",
+  "version": "0.1.44",
   "license": "MIT",
   "type": "module",
   "description": "Poll SVN revisions or Git commits, send each change diff to a reviewer CLI, and write configurable review reports.",

@@ -159,6 +159,9 @@ export async function runReviewCycle(config) {
 
   if (config.rev) {
     changeIdsToReview = await backend.resolveChangeIds(config, targetInfo, config.rev);
+  } else if (config.last < 0) {
+    const candidates = await backend.getLatestChangeIds(config, targetInfo, Math.abs(config.last));
+    changeIdsToReview = candidates.length > 0 ? [candidates[0]] : [];
   } else {
     changeIdsToReview = await backend.getLatestChangeIds(config, targetInfo, config.last || 1);
   }

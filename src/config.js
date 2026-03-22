@@ -161,7 +161,8 @@ export function parseCliArgs(argv) {
     }
 
     if (value === "--last" || value === "-n") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      const hasLastValue = nextValue !== undefined && /^-?\d+$/.test(nextValue);
+      if (!hasLastValue) throw new Error(`Missing value for ${value}`);
       args.last = nextValue;
       index += 1;
       continue;
@@ -258,7 +259,7 @@ export async function resolveConfig(cliArgs = {}) {
   config.last = Number(config.last);
   config.outputFormats = normalizeOutputFormats(config.outputFormats);
 
-  if (!config.rev && (isNaN(config.last) || config.last <= 0)) {
+  if (!config.rev && (isNaN(config.last) || config.last === 0)) {
     config.last = 1;
   }
 
@@ -277,7 +278,7 @@ Options:
   --prompt, -p      Additional instructions or @file.txt to read from file
   --lang, -l        Output language (e.g. zh, en, auto)
   --rev, -v         Review specific revision(s), hashes, branches or ranges (comma-separated)
-  --last, -n        Review the latest N revisions (ignored if --rev is provided) (default: 1)
+  --last, -n        Review the latest N revisions; use negative (-N) to review only the Nth-from-last revision (default: 1)
   --output, -o      Output directory (default: ~/.kodevu)
   --format, -f      Output formats (markdown, json, comma-separated)
   --debug, -d       Print extra debug information
