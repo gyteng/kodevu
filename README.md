@@ -12,25 +12,13 @@ Kodevu is designed to be stateless and requires no configuration files. It relie
 
 ## Quick Start
 
-Review the latest commit in your repository:
+Get a review of your latest commit in seconds:
 
 ```bash
 npx kodevu .
 ```
 
-Review the latest 3 commits:
-
-```bash
-npx kodevu . --last 3
-```
-
-Review a specific commit:
-
-```bash
-npx kodevu . --rev abc1234
-```
-
-Reports are written to `~/.kodevu/` by default.
+Review reports are saved to `~/.kodevu/` by default.
 
 ## Usage
 
@@ -43,13 +31,16 @@ npx kodevu [target] [options]
 - `target`: Repository path (Git) or SVN URL/Working copy (default: `.`).
 - `--reviewer, -r`: `codex`, `gemini`, `copilot`, or `auto` (default: `auto`).
 - `--rev, -v`: A specific revision or commit hash to review.
-- `--last, -n`: Number of latest revisions to review (default: 1).
+- `--last, -n`: Number of latest revisions to review (default: 1). Use negative values (e.g., `-3`) to review only the 3rd commit from the top.
 - `--lang, -l`: Output language (e.g., `zh`, `en`, `auto`).
 - `--prompt, -p`: Additional instructions for the reviewer. Use `@file.txt` to read from a file.
 - `--output, -o`: Report output directory (default: `~/.kodevu`).
 - `--format, -f`: Output formats (e.g., `markdown`, `json`, or `markdown,json`).
 - `--debug, -d`: Print debug information.
 - `--version, -V`: Print the current version and exit.
+
+> [!IMPORTANT]
+> `--rev` and `--last` are mutually exclusive. Specifying both will result in an error.
 
 ### Environment Variables
 
@@ -63,17 +54,38 @@ You can set these in your shell to change default behavior without typing flags 
 
 ## Examples
 
-**Review with a custom prompt from a file:**
+### Selecting Revisions
+
+Review the **latest 3** commits:
+```bash
+npx kodevu . --last 3
+```
+
+Review **only the 3rd** latest commit:
+```bash
+npx kodevu . --last -3
+```
+
+Review a **specific commit** hash:
+```bash
+npx kodevu . --rev abc1234
+```
+
+### Options & Formatting
+
+Review using **custom instructions** from a file:
 ```bash
 npx kodevu . --prompt @my-rules.txt
 ```
 
-**Generate JSON reports in a local folder:**
+Generate **JSON reports** in a local folder:
 ```bash
-npx kodevu . --format json --output ./review-reports
+npx kodevu . --format json --output ./reports
 ```
 
-**Set a persistent reviewer via ENV:**
+### Environment Variables
+
+Set a **persistent reviewer** for your shell session:
 ```bash
 export KODEVU_REVIEWER=gemini
 npx kodevu .

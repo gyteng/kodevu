@@ -221,6 +221,10 @@ export async function resolveConfig(cliArgs = {}) {
     }
   }
 
+  if (cliArgs.rev && cliArgs.last) {
+    throw new Error("Parameters --rev and --last are mutually exclusive. Please specify only one.");
+  }
+
   if (!config.target) {
     config.target = process.cwd();
   }
