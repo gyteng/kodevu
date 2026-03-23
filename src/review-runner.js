@@ -1,5 +1,5 @@
 import path from "node:path";
-import { ProgressDisplay } from "./progress-ui.js";
+import { createProgressReporter } from "./progress-ui.js";
 import { resolveRepositoryContext } from "./vcs-client.js";
 import { logger } from "./logger.js";
 import {
@@ -172,10 +172,8 @@ export async function runReviewCycle(config) {
   }
 
   logger.info(`Reviewing ${backend.displayName} ${backend.changeName}s ${formatChangeList(backend, changeIdsToReview)}`);
-  const progressDisplay = new ProgressDisplay();
-  logger.setProgressDisplay(progressDisplay);
-  const progress = progressDisplay.createItem(`${backend.displayName} ${backend.changeName} batch`);
-  progress.start("0/" + changeIdsToReview.length + " completed");
+  const progress = createProgressReporter(`${backend.displayName} ${backend.changeName} batch`);
+  progress.update(0, `0/${changeIdsToReview.length} completed`);
 
   for (const [index, changeId] of changeIdsToReview.entries()) {
     logger.debug(`Starting review for ${backend.formatChangeId(changeId)}.`);
@@ -187,11 +185,13 @@ export async function runReviewCycle(config) {
     };
 
     try {
-      await reviewChange(config, backend, targetInfo, changeId, { update: syncOverallProgress, log: (message) => progress.log(message) });
+      await reviewChange(config, backend, targetInfo, changeId, { update: syncOverallProgress });
       updateOverallProgress(progress, index + 1, changeIdsToReview.length, 0, `finished ${displayId}`);
     } catch (error) {
-      progress.fail(`failed at ${displayId} (${index}/${changeIdsToReview.length} completed)`);
+      progress.finish("fail", `failed at ${displayId} (${index}/${changeIdsToReview.length} completed)`);
       throw error;
     }
   }
+
+  progress.finish("done", `${backend.displayName} ${backend.changeName} batch complete`);
 }

@@ -6,7 +6,6 @@ class Logger {
   constructor() {
     this.config = null;
     this.logFile = null;
-    this.progressDisplay = null;
     this.initialized = false;
   }
 
@@ -29,10 +28,6 @@ class Logger {
         console.error(`[logger] Failed to initialize log file: ${err.message}`);
       }
     }
-  }
-
-  setProgressDisplay(pd) {
-    this.progressDisplay = pd;
   }
 
   info(message) {
@@ -78,14 +73,10 @@ class Logger {
     // If it's debug and debug mode is off, skip console
     if (isDebug && !this.config?.debug) return;
 
-    if (this.progressDisplay) {
-      this.progressDisplay.log(logLine);
+    if (isError || isWarn) {
+      console.error(logLine);
     } else {
-      if (isError || isWarn) {
-        console.error(logLine);
-      } else {
-        console.log(logLine);
-      }
+      console.log(logLine);
     }
   }
 
