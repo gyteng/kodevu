@@ -21,12 +21,12 @@ List points for improvement regarding code style, performance, or architectural 
 ### 4. Conclusion
 Summarize with a "Pass" or "Needs Revision". If no clear flaws are found, state "No clear flaws found" and mention any residual risks.
 
-Note: You are in a read-only review mode. Do not act as if you are "applying the patch" or "executing code". Provide only textual analysis and feedback.`,
+Note: You are in a read-only review mode. Do not attempt to call any external tools or MCP (Model Context Protocol) tools. Do not act as if you are "applying the patch" or "executing code". Provide only textual analysis and feedback.`,
     phrases: {
       workspaceRoot: "Workspace context (read-only):",
       noWorkspace: "No local repository workspace is available for this review run.",
       besidesDiff: "You can read related files in the workspace to understand call sites, shared utilities, configuration, or data flow.",
-      reviewFromDiff: "Review primarily based on the provided diff. Do not assume access to other local files or shell commands.",
+      reviewFromDiff: "Review primarily based on the provided diff. Do not assume access to other local files or shell commands. You MUST NOT call any MCP tools.",
       fileRefs: "Reference files using plain text like 'path/to/file.js:123'. Do not generate clickable workspace links.",
       repoType: "Repository Type",
       changeId: "Change ID",
@@ -60,12 +60,12 @@ Note: You are in a read-only review mode. Do not act as if you are "applying the
 ### 4. 审查结论 (Conclusion)
 如果发现明显缺陷，总结修复建议；如果未发现明显缺陷，请说明“未发现明显缺陷”并指出可能的残留风险。
 
-注意：你正处于只读审查模式，请勿表现出“正在应用补丁”或“准备执行代码”的行为。只需提供文字审查分析。`,
+注意：你正处于只读审查模式，禁止调用任何外部工具或 MCP (Model Context Protocol) 工具。请勿表现出“正在应用补丁”或“准备执行代码”的行为。只需提供文字审查分析。`,
     phrases: {
       workspaceRoot: "只读工作区上下文：",
       noWorkspace: "此审查运行没有可用的本地仓库工作区。",
       besidesDiff: "你可以阅读工作区中的其他文件以了解调用点、工具类、配置或数据流。",
-      reviewFromDiff: "主要根据提供的 Diff 进行审查。不要假设可以访问其他文件或执行 Shell 命令。",
+      reviewFromDiff: "主要根据提供的 Diff 进行审查。不要假设可以访问其他文件或执行 Shell 命令。你绝不能调用任何 MCP 工具。",
       fileRefs: "使用纯文本引用文件，如 'path/to/file.js:123'。不要生成可点击的链接。",
       repoType: "仓库类型",
       changeId: "变更 ID",
@@ -99,12 +99,12 @@ Note: You are in a read-only review mode. Do not act as if you are "applying the
 ### 4. 審查結論 (Conclusion)
 如果發現明顯缺陷，總結修復建議；如果未發現明顯缺陷，請說明「未發現明顯缺陷」並指出可能的殘留風險。
 
-注意：你正處於唯讀審查模式，請勿表現出「正在應用補丁」或「準備執行代碼」的行為。只需提供文字審查分析。`,
+注意：你正處於唯讀審查模式，禁止調用任何外部工具或 MCP (Model Context Protocol) 工具。請勿表現出「正在應用補丁」或「準備執行代碼」的行為。只需提供文字審查分析。`,
     phrases: {
       workspaceRoot: "唯讀工作區上下文：",
       noWorkspace: "此審查運行沒有可用的本地倉庫工作區。",
       besidesDiff: "你可以閱讀工作區中的其他文件以了解調用點、工具類、配置或資料流。",
-      reviewFromDiff: "主要根據提供的 Diff 進行審查。不要假設可以訪問其他文件或執行 Shell 命令。",
+      reviewFromDiff: "主要根據提供的 Diff 進行審查。不要假設可以訪問其他文件或執行 Shell 命令。你絕不能調用任何 MCP 工具。",
       fileRefs: "使用純文本引用文件，如 'path/to/file.js:123'。不要生成可點擊的連結。",
       repoType: "倉庫類型",
       changeId: "變更 ID",

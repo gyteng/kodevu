@@ -82,6 +82,7 @@ export const REVIEWERS = {
         `Use the file-reading tools to open this exact file path: ${reviewInputFile}`,
         "That file contains the full review instructions and the unified diff to review.",
         "Follow the instructions from that file exactly and output the final review directly.",
+        "Do not call any MCP tools or external tools except for reading the initial instruction file.",
         "Do not ask clarifying questions. Do not mention tool usage. Do not say you are ready.",
         "Start immediately with the review content."
       ].join("\n");
