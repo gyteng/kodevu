@@ -56,7 +56,7 @@ function normalizeOutputFormats(outputFormats) {
   return normalized.length === 0 ? ["markdown"] : normalized;
 }
 
-function detectLanguage() {
+export function detectLanguage() {
   const envLang = (process.env.LANG || process.env.LC_ALL || process.env.LC_MESSAGES || "").toLowerCase();
   const intlLocale = (() => {
     try {
@@ -66,12 +66,19 @@ function detectLanguage() {
     }
   })();
 
-  const locales = [envLang, intlLocale].filter(Boolean);
+  const locales = [envLang, intlLocale].filter(l => l && l !== "und");
+
+  // 1. Search for Chinese in any source first, to avoid "fake" English defaults in some shells on Windows
   for (const loc of locales) {
     if (loc.startsWith("zh")) return "zh";
+  }
+
+  // 2. Search for English
+  for (const loc of locales) {
     if (loc.startsWith("en")) return "en";
   }
 
+  // 3. Fallback to the first part of the first detected locale, or "en"
   return locales[0]?.split(/[._-]/)[0] || "en";
 }
 
