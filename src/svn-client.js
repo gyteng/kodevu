@@ -57,7 +57,6 @@ export async function getTargetInfo(config) {
     targetUrl,
     targetRepoPath,
     targetDisplay: config.target,
-    stateKey: `svn:${targetUrl}`,
     workingCopyPath:
       entry["wc-info"]?.["wcroot-abspath"] || (path.isAbsolute(config.target) ? config.target : null)
   };
@@ -84,33 +83,6 @@ export async function getLatestRevision(config, targetInfo) {
   return revision;
 }
 
-export async function getPendingRevisions(config, targetInfo, startExclusive, endInclusive, limit) {
-  const startRevision = Number.isInteger(startExclusive) ? startExclusive + 1 : 1;
-
-  if (endInclusive < startRevision) {
-    return [];
-  }
-
-  const result = await runCommand(
-    SVN_COMMAND,
-    [
-      "log",
-      "--xml",
-      "--quiet",
-      "-r",
-      `${startRevision}:${endInclusive}`,
-      getRemoteTarget(targetInfo, config)
-    ],
-    { encoding: COMMAND_ENCODING, trim: true, debug: config.debug }
-  );
-  const parsed = xmlParser.parse(result.stdout);
-
-  return asArray(parsed?.log?.logentry)
-    .map((entry) => Number(entry?.revision))
-    .filter((revision) => Number.isInteger(revision))
-    .sort((left, right) => left - right)
-    .slice(0, limit);
-}
 
 export async function getLatestRevisionIds(config, targetInfo, limit) {
   const result = await runCommand(

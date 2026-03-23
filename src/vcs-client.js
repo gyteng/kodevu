@@ -1,19 +1,10 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 import * as gitClient from "./git-client.js";
 import * as svnClient from "./svn-client.js";
+import { pathExists, getTimestampPrefix } from "./utils.js";
 
 function isLikelyUrl(value) {
   return /^[a-z][a-z0-9+.-]*:\/\//i.test(value);
-}
-
-async function pathExists(targetPath) {
-  try {
-    await fs.access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function createSvnBackend() {
@@ -25,15 +16,7 @@ function createSvnBackend() {
       return `r${revision}`;
     },
     getReportFileName(revision) {
-      const now = new Date();
-      const datePrefix = now.getFullYear() +
-        String(now.getMonth() + 1).padStart(2, '0') +
-        String(now.getDate()).padStart(2, '0') +
-        '-' +
-        String(now.getHours()).padStart(2, '0') +
-        String(now.getMinutes()).padStart(2, '0') +
-        String(now.getSeconds()).padStart(2, '0');
-      return `${datePrefix}-svn-r${revision}.md`;
+      return `${getTimestampPrefix()}-svn-r${revision}.md`;
     },
 
     async resolveChangeIds(config, targetInfo, revString) {
@@ -76,15 +59,7 @@ function createGitBackend() {
       return commitHash.slice(0, 12);
     },
     getReportFileName(commitHash) {
-      const now = new Date();
-      const datePrefix = now.getFullYear() +
-        String(now.getMonth() + 1).padStart(2, '0') +
-        String(now.getDate()).padStart(2, '0') +
-        '-' +
-        String(now.getHours()).padStart(2, '0') +
-        String(now.getMinutes()).padStart(2, '0') +
-        String(now.getSeconds()).padStart(2, '0');
-      return `${datePrefix}-git-${commitHash.slice(0, 12)}.md`;
+      return `${getTimestampPrefix()}-git-${commitHash.slice(0, 12)}.md`;
     },
 
     async resolveChangeIds(config, targetInfo, revString) {

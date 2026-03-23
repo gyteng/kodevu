@@ -66,14 +66,13 @@ function detectLanguage() {
     }
   })();
 
-  if (os.platform() === "win32" && intlLocale.startsWith("zh")) return "zh";
-  if (envLang.startsWith("zh")) return "zh";
-  if (envLang.startsWith("en")) return "en";
-  if (envLang) return envLang.split(/[._-]/)[0];
-  if (intlLocale.startsWith("zh")) return "zh";
-  if (intlLocale.startsWith("en")) return "en";
-  if (intlLocale) return intlLocale.split("-")[0];
-  return "en";
+  const locales = [envLang, intlLocale].filter(Boolean);
+  for (const loc of locales) {
+    if (loc.startsWith("zh")) return "zh";
+    if (loc.startsWith("en")) return "en";
+  }
+
+  return locales[0]?.split(/[._-]/)[0] || "en";
 }
 
 async function resolveAutoReviewers(debug) {
@@ -204,20 +203,9 @@ export async function resolveConfig(cliArgs = {}) {
   }
 
   // 2. Merge CLI Arguments
-  const cliMapping = {
-    target: "target",
-    reviewer: "reviewer",
-    prompt: "prompt",
-    lang: "lang",
-    rev: "rev",
-    last: "last",
-    outputDir: "outputDir",
-    outputFormats: "outputFormats"
-  };
-
-  for (const [cliKey, configKey] of Object.entries(cliMapping)) {
-    if (cliArgs[cliKey]) {
-      config[configKey] = cliArgs[cliKey];
+  for (const key of ["target", "reviewer", "prompt", "lang", "rev", "last", "outputDir", "outputFormats"]) {
+    if (cliArgs[key] !== undefined && cliArgs[key] !== "") {
+      config[key] = cliArgs[key];
     }
   }
 

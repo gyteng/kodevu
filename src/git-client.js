@@ -61,8 +61,7 @@ export async function getTargetInfo(config) {
     requestedTargetPath,
     targetDisplay: requestedTargetPath,
     targetPathspec: relativeTargetPath ? relativeTargetPath : "",
-    branchName: branchResult.stdout || "HEAD",
-    stateKey: `git:${repoRootPath}:${relativeTargetPath || "."}`
+    branchName: branchResult.stdout || "HEAD"
   };
 }
 
@@ -81,29 +80,6 @@ export async function getLatestCommit(config, targetInfo) {
   return latestCommit;
 }
 
-export async function isValidCheckpoint(config, targetInfo, checkpointCommit, latestCommit) {
-  if (!checkpointCommit) {
-    return true;
-  }
-
-  const commitExists = await runGit(config, ["cat-file", "-e", `${checkpointCommit}^{commit}`], {
-    cwd: targetInfo.repoRootPath,
-    allowFailure: true,
-    trim: true
-  });
-
-  if (commitExists.code !== 0) {
-    return false;
-  }
-
-  const ancestorResult = await runGit(config, ["merge-base", "--is-ancestor", checkpointCommit, latestCommit], {
-    cwd: targetInfo.repoRootPath,
-    allowFailure: true,
-    trim: true
-  });
-
-  return ancestorResult.code === 0;
-}
 
 export async function resolveCommits(config, targetInfo, revSpec) {
   const result = await runGit(
@@ -124,24 +100,6 @@ export async function resolveCommits(config, targetInfo, revSpec) {
   return splitLines(result.stdout);
 }
 
-export async function getPendingCommits(config, targetInfo, startExclusive, endInclusive, limit) {
-  const args = ["rev-list", "--reverse"];
-
-  if (startExclusive) {
-    args.push(endInclusive, `^${startExclusive}`);
-  } else {
-    args.push(endInclusive);
-  }
-
-  args.push(...buildPathArgs(targetInfo));
-
-  const result = await runGit(config, args, {
-    cwd: targetInfo.repoRootPath,
-    trim: true
-  });
-
-  return splitLines(result.stdout).slice(0, limit);
-}
 
 export async function getLatestCommitIds(config, targetInfo, limit) {
   const result = await runGit(
