@@ -8,7 +8,8 @@ const require = createRequire(import.meta.url);
 const { version: packageVersion } = require("../package.json");
 
 const defaultStorageDir = path.join(os.homedir(), ".kodevu");
-const SUPPORTED_REVIEWERS = ["codex", "gemini", "copilot"];
+const SUPPORTED_REVIEWERS = ["codex", "gemini", "copilot", "openai"];
+const AUTO_SUPPORTED_REVIEWERS = ["codex", "gemini", "copilot"];
 
 const defaultConfig = {
   reviewer: "auto",
@@ -21,7 +22,12 @@ const defaultConfig = {
   maxRevisionsPerRun: 5,
   outputFormats: ["markdown"],
   rev: "",
-  last: 0
+  last: 0,
+  openaiApiKey: "",
+  openaiBaseUrl: "https://api.openai.com/v1",
+  openaiModel: "gpt-5-mini",
+  openaiOrganization: "",
+  openaiProject: ""
 };
 
 const ENV_MAP = {
@@ -31,7 +37,12 @@ const ENV_MAP = {
   KODEVU_PROMPT: "prompt",
   KODEVU_TIMEOUT: "commandTimeoutMs",
   KODEVU_MAX_REVISIONS: "maxRevisionsPerRun",
-  KODEVU_FORMATS: "outputFormats"
+  KODEVU_FORMATS: "outputFormats",
+  KODEVU_OPENAI_API_KEY: "openaiApiKey",
+  KODEVU_OPENAI_BASE_URL: "openaiBaseUrl",
+  KODEVU_OPENAI_MODEL: "openaiModel",
+  KODEVU_OPENAI_ORG: "openaiOrganization",
+  KODEVU_OPENAI_PROJECT: "openaiProject"
 };
 
 function resolvePath(value) {
@@ -84,13 +95,13 @@ export function detectLanguage() {
 
 async function resolveAutoReviewers(debug) {
   const availableReviewers = [];
-  for (const reviewerName of SUPPORTED_REVIEWERS) {
+  for (const reviewerName of AUTO_SUPPORTED_REVIEWERS) {
     const commandPath = await findCommandOnPath(reviewerName, { debug });
     if (commandPath) availableReviewers.push({ reviewerName, commandPath });
   }
 
   if (availableReviewers.length === 0) {
-    throw new Error(`No reviewer CLI found in PATH. Install one of: ${SUPPORTED_REVIEWERS.join(", ")}`);
+    throw new Error(`No reviewer CLI found in PATH. Install one of: ${AUTO_SUPPORTED_REVIEWERS.join(", ")}`);
   }
 
   // Shuffle for variety
@@ -114,7 +125,12 @@ export function parseCliArgs(argv) {
     rev: "",
     last: "",
     outputDir: "",
-    outputFormats: ""
+    outputFormats: "",
+    openaiApiKey: "",
+    openaiBaseUrl: "",
+    openaiModel: "",
+    openaiOrganization: "",
+    openaiProject: ""
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -188,6 +204,41 @@ export function parseCliArgs(argv) {
       continue;
     }
 
+    if (value === "--openai-api-key") {
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.openaiApiKey = nextValue;
+      index += 1;
+      continue;
+    }
+
+    if (value === "--openai-base-url") {
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.openaiBaseUrl = nextValue;
+      index += 1;
+      continue;
+    }
+
+    if (value === "--openai-model") {
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.openaiModel = nextValue;
+      index += 1;
+      continue;
+    }
+
+    if (value === "--openai-org") {
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.openaiOrganization = nextValue;
+      index += 1;
+      continue;
+    }
+
+    if (value === "--openai-project") {
+      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      args.openaiProject = nextValue;
+      index += 1;
+      continue;
+    }
+
     if (!value.startsWith("-") && !args.target) {
       args.target = value;
       continue;
@@ -210,7 +261,21 @@ export async function resolveConfig(cliArgs = {}) {
   }
 
   // 2. Merge CLI Arguments
-  for (const key of ["target", "reviewer", "prompt", "lang", "rev", "last", "outputDir", "outputFormats"]) {
+  for (const key of [
+    "target",
+    "reviewer",
+    "prompt",
+    "lang",
+    "rev",
+    "last",
+    "outputDir",
+    "outputFormats",
+    "openaiApiKey",
+    "openaiBaseUrl",
+    "openaiModel",
+    "openaiOrganization",
+    "openaiProject"
+  ]) {
     if (cliArgs[key] !== undefined && cliArgs[key] !== "") {
       config[key] = cliArgs[key];
     }
@@ -257,9 +322,18 @@ export async function resolveConfig(cliArgs = {}) {
   config.commandTimeoutMs = Number(config.commandTimeoutMs);
   config.last = Number(config.last);
   config.outputFormats = normalizeOutputFormats(config.outputFormats);
+  config.openaiApiKey = String(config.openaiApiKey || "").trim();
+  config.openaiBaseUrl = String(config.openaiBaseUrl || defaultConfig.openaiBaseUrl).trim().replace(/\/+$/, "");
+  config.openaiModel = String(config.openaiModel || defaultConfig.openaiModel).trim();
+  config.openaiOrganization = String(config.openaiOrganization || "").trim();
+  config.openaiProject = String(config.openaiProject || "").trim();
 
   if (!config.rev && (isNaN(config.last) || config.last === 0)) {
     config.last = 1;
+  }
+
+  if (config.reviewer === "openai" && !config.openaiApiKey) {
+    throw new Error('Reviewer "openai" requires an API key. Set KODEVU_OPENAI_API_KEY or pass --openai-api-key.');
   }
 
   return config;
@@ -273,13 +347,18 @@ Usage:
 
 Options:
   --target, <path>  Target repository path (default: current directory)
-  --reviewer, -r    Reviewer (codex | gemini | copilot | auto, default: auto)
+  --reviewer, -r    Reviewer (codex | gemini | copilot | openai | auto, default: auto)
   --prompt, -p      Additional instructions or @file.txt to read from file
   --lang, -l        Output language (e.g. zh, en, auto)
   --rev, -v         Review specific revision(s), hashes, branches or ranges (comma-separated)
   --last, -n        Review the latest N revisions; use negative (-N) to review only the Nth-from-last revision (default: 1)
   --output, -o      Output directory (default: ~/.kodevu)
   --format, -f      Output formats (markdown, json, comma-separated)
+  --openai-api-key  API key used when reviewer=openai
+  --openai-base-url Base URL used when reviewer=openai (default: https://api.openai.com/v1)
+  --openai-model    Model used when reviewer=openai (default: gpt-5-mini)
+  --openai-org      Optional OpenAI organization ID
+  --openai-project  Optional OpenAI project ID
   --debug, -d       Print extra debug information
   --help, -h        Show help
   --version, -V     Show version
@@ -290,6 +369,11 @@ Environment Variables:
   KODEVU_OUTPUT_DIR Default output directory
   KODEVU_PROMPT     Default prompt text
   KODEVU_TIMEOUT    Reviewer timeout in ms
+  KODEVU_OPENAI_API_KEY   API key for reviewer=openai
+  KODEVU_OPENAI_BASE_URL  Base URL for reviewer=openai
+  KODEVU_OPENAI_MODEL     Model for reviewer=openai
+  KODEVU_OPENAI_ORG       Organization ID for reviewer=openai
+  KODEVU_OPENAI_PROJECT   Project ID for reviewer=openai
 `);
 }
 

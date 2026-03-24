@@ -29,13 +29,18 @@ npx kodevu [target] [options]
 ### Options
 
 - `target`: Repository path (Git) or SVN URL/Working copy (default: `.`).
-- `--reviewer, -r`: `codex`, `gemini`, `copilot`, or `auto` (default: `auto`).
+- `--reviewer, -r`: `codex`, `gemini`, `copilot`, `openai`, or `auto` (default: `auto`).
 - `--rev, -v`: A specific revision or commit hash to review.
 - `--last, -n`: Number of latest revisions to review (default: 1). Use negative values (e.g., `-3`) to review only the 3rd commit from the top.
 - `--lang, -l`: Output language (e.g., `zh`, `en`, `auto`).
 - `--prompt, -p`: Additional instructions for the reviewer. Use `@file.txt` to read from a file.
 - `--output, -o`: Report output directory (default: `~/.kodevu`).
 - `--format, -f`: Output formats (e.g., `markdown`, `json`, or `markdown,json`).
+- `--openai-api-key`: API key used when `--reviewer openai`.
+- `--openai-base-url`: Base URL used when `--reviewer openai` (default: `https://api.openai.com/v1`).
+- `--openai-model`: Model used when `--reviewer openai` (default: `gpt-5-mini`).
+- `--openai-org`: Optional OpenAI organization ID.
+- `--openai-project`: Optional OpenAI project ID.
 - `--debug, -d`: Print debug information.
 - `--version, -V`: Print the current version and exit.
 
@@ -51,6 +56,11 @@ You can set these in your shell to change default behavior without typing flags 
 - `KODEVU_OUTPUT_DIR`: Default output directory.
 - `KODEVU_PROMPT`: Default prompt instructions.
 - `KODEVU_TIMEOUT`: Reviewer execution timeout in milliseconds.
+- `KODEVU_OPENAI_API_KEY`: API key for `openai`.
+- `KODEVU_OPENAI_BASE_URL`: Base URL for `openai`.
+- `KODEVU_OPENAI_MODEL`: Model for `openai`.
+- `KODEVU_OPENAI_ORG`: Optional organization ID for `openai`.
+- `KODEVU_OPENAI_PROJECT`: Optional project ID for `openai`.
 
 ## Examples
 
@@ -91,11 +101,29 @@ export KODEVU_REVIEWER=gemini
 npx kodevu .
 ```
 
+Use the OpenAI API directly with a small set of extra settings:
+```bash
+export KODEVU_REVIEWER=openai
+export KODEVU_OPENAI_API_KEY=sk-...
+export KODEVU_OPENAI_MODEL=gpt-5-mini
+npx kodevu .
+```
+
+Use a custom OpenAI-compatible endpoint:
+```bash
+npx kodevu . \
+  --reviewer openai \
+  --openai-api-key sk-... \
+  --openai-base-url https://your-gateway.example.com/v1 \
+  --openai-model gpt-5-mini
+```
+
 ## How it Works
 
 - **Git Targets**: `target` must be a local repository or subdirectory.
 - **SVN Targets**: `target` can be a working copy path or repository URL.
 - **Reviewer "auto"**: Probes `codex`, `gemini`, and `copilot` in your `PATH` and selects one.
+- **Reviewer "openai"**: Calls the OpenAI Chat Completions API directly. `auto` does not select `openai`, so API-based use stays explicit.
 - **Contextual Review**: For local repositories, the reviewer can inspect related files beyond the diff to provide deeper insights.
 
 ## License

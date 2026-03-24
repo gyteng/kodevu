@@ -6,6 +6,48 @@ import { prepareDiffPayloads } from "./diff-processor.js";
 import { buildPrompt, getReviewWorkspaceRoot } from "./report-generator.js";
 import { resolveTokenUsage } from "./token-usage.js";
 
+function buildOpenAiRequestHeaders(config) {
+  const headers = {
+    "content-type": "application/json",
+    authorization: `Bearer ${config.openaiApiKey}`
+  };
+
+  if (config.openaiOrganization) {
+    headers["OpenAI-Organization"] = config.openaiOrganization;
+  }
+
+  if (config.openaiProject) {
+    headers["OpenAI-Project"] = config.openaiProject;
+  }
+
+  return headers;
+}
+
+function extractOpenAiMessageContent(content) {
+  if (typeof content === "string") {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return "";
+  }
+
+  return content
+    .map((item) => {
+      if (typeof item === "string") {
+        return item;
+      }
+
+      if (item?.type === "text" && typeof item.text === "string") {
+        return item.text;
+      }
+
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
 export const REVIEWERS = {
   codex: {
     displayName: "Codex",
@@ -122,6 +164,78 @@ export const REVIEWERS = {
         await fs.rm(tempDir, { recursive: true, force: true });
       }
     }
+  },
+  openai: {
+    displayName: "OpenAI API",
+    responseSectionTitle: "OpenAI Response",
+    emptyResponseText: "_No final response returned from the OpenAI API._",
+    async run(config, workingDir, promptText, diffText) {
+      const requestBody = {
+        model: config.openaiModel,
+        messages: [
+          {
+            role: "user",
+            content: [promptText, "Unified diff:", diffText].join("\n\n")
+          }
+        ]
+      };
+
+      try {
+        const response = await fetch(`${config.openaiBaseUrl}/chat/completions`, {
+          method: "POST",
+          headers: buildOpenAiRequestHeaders(config),
+          body: JSON.stringify(requestBody),
+          signal: AbortSignal.timeout(config.commandTimeoutMs)
+        });
+
+        const responseText = await response.text();
+        let payload;
+
+        try {
+          payload = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          payload = null;
+        }
+
+        if (!response.ok) {
+          const errorMessage = payload?.error?.message || responseText || `HTTP ${response.status}`;
+          return {
+            code: response.status,
+            timedOut: false,
+            stdout: "",
+            stderr: errorMessage,
+            message: ""
+          };
+        }
+
+        const message = extractOpenAiMessageContent(payload?.choices?.[0]?.message?.content);
+        const usage = payload?.usage
+          ? {
+              inputTokens: Number(payload.usage.prompt_tokens || 0),
+              outputTokens: Number(payload.usage.completion_tokens || 0),
+              totalTokens: Number(payload.usage.total_tokens || 0)
+            }
+          : null;
+
+        return {
+          code: 0,
+          timedOut: false,
+          stdout: responseText,
+          stderr: "",
+          message,
+          usage
+        };
+      } catch (error) {
+        const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+        return {
+          code: 1,
+          timedOut,
+          stdout: "",
+          stderr: error?.message || String(error),
+          message: ""
+        };
+      }
+    }
   }
 };
 
@@ -133,6 +247,7 @@ export async function runReviewerPrompt(config, backend, targetInfo, details, di
   const result = await reviewer.run(config, reviewWorkspaceRoot, promptText, diffPayloads.review.text);
   const tokenUsage = resolveTokenUsage(
     config.reviewer,
+    result.usage,
     result.stderr,
     promptText,
     diffPayloads.review.text,

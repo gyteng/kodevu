@@ -32,7 +32,29 @@ export function parseTokenUsage(stderr) {
   return { inputTokens, outputTokens, totalTokens };
 }
 
-export function resolveTokenUsage(reviewerName, stderr, promptText, diffText, responseText) {
+function normalizeUsageObject(usage) {
+  if (!usage || typeof usage !== "object") {
+    return null;
+  }
+
+  const inputTokens = Number(usage.inputTokens || 0);
+  const outputTokens = Number(usage.outputTokens || 0);
+  const totalTokens = Number(usage.totalTokens || (inputTokens + outputTokens));
+
+  if (totalTokens <= 0 && inputTokens <= 0 && outputTokens <= 0) {
+    return null;
+  }
+
+  return { inputTokens, outputTokens, totalTokens };
+}
+
+export function resolveTokenUsage(reviewerName, usage, stderr, promptText, diffText, responseText) {
+  const normalizedUsage = normalizeUsageObject(usage);
+
+  if (normalizedUsage) {
+    return { ...normalizedUsage, source: "reviewer" };
+  }
+
   const parsed = parseTokenUsage(stderr);
 
   if (parsed && parsed.totalTokens > 0) {
