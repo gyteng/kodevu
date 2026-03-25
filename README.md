@@ -32,6 +32,7 @@ npx kodevu [target] [options]
 - `--reviewer, -r`: `codex`, `gemini`, `copilot`, `openai`, or `auto` (default: `auto`).
 - `--rev, -v`: A specific revision or commit hash to review.
 - `--last, -n`: Number of latest revisions to review (default: 1). Use negative values (e.g., `-3`) to review only the 3rd commit from the top.
+- `--uncommitted, -u`: Review current uncommitted changes in the target working tree.
 - `--lang, -l`: Output language (e.g., `zh`, `en`, `auto`).
 - `--prompt, -p`: Additional instructions for the reviewer. Use `@file.txt` to read from a file.
 - `--output, -o`: Report output directory (default: `~/.kodevu`).
@@ -46,6 +47,9 @@ npx kodevu [target] [options]
 
 > [!IMPORTANT]
 > `--rev` and `--last` are mutually exclusive. Specifying both will result in an error.
+
+> [!IMPORTANT]
+> `--uncommitted` is mutually exclusive with `--rev` and `--last`.
 
 ### Environment Variables
 
@@ -79,6 +83,11 @@ npx kodevu . --last -3
 Review a **specific commit** hash:
 ```bash
 npx kodevu . --rev abc1234
+```
+
+Review **current uncommitted changes** (Git/SVN working copy):
+```bash
+npx kodevu . --uncommitted
 ```
 
 ### Options & Formatting

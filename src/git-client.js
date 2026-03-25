@@ -181,6 +181,49 @@ function parseNameStatus(stdout) {
   return changedPaths;
 }
 
+function parseNameStatusLines(stdout) {
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.split("\t"))
+    .map((parts) => {
+      const status = (parts[0] || "M").trim();
+      const action = status[0] || "M";
+
+      if ((action === "R" || action === "C") && parts.length >= 3) {
+        return {
+          action,
+          relativePath: parts[2],
+          previousPath: parts[1] || null
+        };
+      }
+
+      return {
+        action,
+        relativePath: parts[1] || "",
+        previousPath: null
+      };
+    })
+    .filter((item) => item.relativePath);
+}
+
+function mergeChangedPaths(...groups) {
+  const merged = [];
+  const seen = new Set();
+
+  for (const group of groups) {
+    for (const item of group) {
+      const key = `${item.action}|${item.relativePath}|${item.previousPath || ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(item);
+    }
+  }
+
+  return merged;
+}
+
 export async function getCommitDetails(config, targetInfo, commitHash) {
   const metaResult = await runGit(
     config,
@@ -212,5 +255,65 @@ export async function getCommitDetails(config, targetInfo, commitHash) {
     date: date.trim(),
     message,
     changedPaths: parseNameStatus(changedFilesResult.stdout)
+  };
+}
+
+export async function getUncommittedDiff(config, targetInfo) {
+  const unstaged = await runGit(
+    config,
+    [
+      "diff",
+      "--find-renames",
+      "--find-copies",
+      "--no-ext-diff",
+      ...buildPathArgs(targetInfo)
+    ],
+    { cwd: targetInfo.repoRootPath, trim: false }
+  );
+  const staged = await runGit(
+    config,
+    [
+      "diff",
+      "--cached",
+      "--find-renames",
+      "--find-copies",
+      "--no-ext-diff",
+      ...buildPathArgs(targetInfo)
+    ],
+    { cwd: targetInfo.repoRootPath, trim: false }
+  );
+
+  const sections = [];
+  if (unstaged.stdout.trim()) {
+    sections.push("# Unstaged changes", unstaged.stdout.trimEnd());
+  }
+  if (staged.stdout.trim()) {
+    sections.push("# Staged changes", staged.stdout.trimEnd());
+  }
+
+  return sections.join("\n\n");
+}
+
+export async function getUncommittedDetails(config, targetInfo) {
+  const unstagedFiles = await runGit(
+    config,
+    ["diff", "--name-status", "-M", "-C", ...buildPathArgs(targetInfo)],
+    { cwd: targetInfo.repoRootPath, trim: false }
+  );
+  const stagedFiles = await runGit(
+    config,
+    ["diff", "--cached", "--name-status", "-M", "-C", ...buildPathArgs(targetInfo)],
+    { cwd: targetInfo.repoRootPath, trim: false }
+  );
+
+  const unstagedChanged = parseNameStatusLines(unstagedFiles.stdout);
+  const stagedChanged = parseNameStatusLines(stagedFiles.stdout);
+
+  return {
+    commitHash: "UNCOMMITTED",
+    author: "working-tree",
+    date: new Date().toISOString(),
+    message: "Uncommitted changes (staged + unstaged).",
+    changedPaths: mergeChangedPaths(unstagedChanged, stagedChanged)
   };
 }

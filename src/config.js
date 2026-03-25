@@ -23,6 +23,7 @@ const defaultConfig = {
   outputFormats: ["markdown"],
   rev: "",
   last: 0,
+  uncommitted: false,
   openaiApiKey: "",
   openaiBaseUrl: "https://api.openai.com/v1",
   openaiModel: "gpt-5-mini",
@@ -124,6 +125,7 @@ export function parseCliArgs(argv) {
     prompt: "",
     rev: "",
     last: "",
+    uncommitted: false,
     outputDir: "",
     outputFormats: "",
     openaiApiKey: "",
@@ -187,6 +189,11 @@ export function parseCliArgs(argv) {
       if (!hasLastValue) throw new Error(`Missing value for ${value}`);
       args.last = nextValue;
       index += 1;
+      continue;
+    }
+
+    if (value === "--uncommitted" || value === "-u") {
+      args.uncommitted = true;
       continue;
     }
 
@@ -268,6 +275,7 @@ export async function resolveConfig(cliArgs = {}) {
     "lang",
     "rev",
     "last",
+    "uncommitted",
     "outputDir",
     "outputFormats",
     "openaiApiKey",
@@ -283,6 +291,10 @@ export async function resolveConfig(cliArgs = {}) {
 
   if (cliArgs.rev && cliArgs.last) {
     throw new Error("Parameters --rev and --last are mutually exclusive. Please specify only one.");
+  }
+
+  if (cliArgs.uncommitted && (cliArgs.rev || cliArgs.last)) {
+    throw new Error("Parameter --uncommitted is mutually exclusive with --rev and --last.");
   }
 
   if (!config.target) {
@@ -321,6 +333,7 @@ export async function resolveConfig(cliArgs = {}) {
   config.maxRevisionsPerRun = Number(config.maxRevisionsPerRun);
   config.commandTimeoutMs = Number(config.commandTimeoutMs);
   config.last = Number(config.last);
+  config.uncommitted = Boolean(config.uncommitted);
   config.outputFormats = normalizeOutputFormats(config.outputFormats);
   config.openaiApiKey = String(config.openaiApiKey || "").trim();
   config.openaiBaseUrl = String(config.openaiBaseUrl || defaultConfig.openaiBaseUrl).trim().replace(/\/+$/, "");
@@ -328,7 +341,7 @@ export async function resolveConfig(cliArgs = {}) {
   config.openaiOrganization = String(config.openaiOrganization || "").trim();
   config.openaiProject = String(config.openaiProject || "").trim();
 
-  if (!config.rev && (isNaN(config.last) || config.last === 0)) {
+  if (!config.uncommitted && !config.rev && (isNaN(config.last) || config.last === 0)) {
     config.last = 1;
   }
 
@@ -352,6 +365,7 @@ Options:
   --lang, -l        Output language (e.g. zh, en, auto)
   --rev, -v         Review specific revision(s), hashes, branches or ranges (comma-separated)
   --last, -n        Review the latest N revisions; use negative (-N) to review only the Nth-from-last revision (default: 1)
+  --uncommitted, -u    Review current uncommitted changes (mutually exclusive with --rev and --last)
   --output, -o      Output directory (default: ~/.kodevu)
   --format, -f      Output formats (markdown, json, comma-separated)
   --openai-api-key  API key used when reviewer=openai

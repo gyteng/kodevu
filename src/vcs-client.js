@@ -13,9 +13,13 @@ function createSvnBackend() {
     displayName: "SVN",
     changeName: "revision",
     formatChangeId(revision) {
+      if (revision === "UNCOMMITTED") return "uncommitted";
       return `r${revision}`;
     },
     getReportFileName(revision) {
+      if (revision === "UNCOMMITTED") {
+        return `${getTimestampPrefix()}-svn-uncommitted.md`;
+      }
       return `${getTimestampPrefix()}-svn-r${revision}.md`;
     },
 
@@ -33,9 +37,25 @@ function createSvnBackend() {
       return await svnClient.getLatestRevisionIds(config, targetInfo, limit);
     },
     async getChangeDiff(config, targetInfo, revision) {
+      if (revision === "UNCOMMITTED") {
+        return await svnClient.getUncommittedDiff(config, targetInfo);
+      }
       return await svnClient.getRevisionDiff(config, revision);
     },
     async getChangeDetails(config, targetInfo, revision) {
+      if (revision === "UNCOMMITTED") {
+        const details = await svnClient.getUncommittedDetails(config, targetInfo);
+
+        return {
+          id: "UNCOMMITTED",
+          displayId: "uncommitted",
+          author: details.author,
+          date: details.date,
+          message: details.message,
+          changedPaths: details.changedPaths
+        };
+      }
+
       const details = await svnClient.getRevisionDetails(config, targetInfo, revision);
 
       return {
@@ -56,9 +76,13 @@ function createGitBackend() {
     displayName: "Git",
     changeName: "commit",
     formatChangeId(commitHash) {
+      if (commitHash === "UNCOMMITTED") return "uncommitted";
       return commitHash.slice(0, 12);
     },
     getReportFileName(commitHash) {
+      if (commitHash === "UNCOMMITTED") {
+        return `${getTimestampPrefix()}-git-uncommitted.md`;
+      }
       return `${getTimestampPrefix()}-git-${commitHash.slice(0, 12)}.md`;
     },
 
@@ -82,9 +106,25 @@ function createGitBackend() {
       return await gitClient.getLatestCommitIds(config, targetInfo, limit);
     },
     async getChangeDiff(config, targetInfo, commitHash) {
+      if (commitHash === "UNCOMMITTED") {
+        return await gitClient.getUncommittedDiff(config, targetInfo);
+      }
       return await gitClient.getCommitDiff(config, targetInfo, commitHash);
     },
     async getChangeDetails(config, targetInfo, commitHash) {
+      if (commitHash === "UNCOMMITTED") {
+        const details = await gitClient.getUncommittedDetails(config, targetInfo);
+
+        return {
+          id: "UNCOMMITTED",
+          displayId: "uncommitted",
+          author: details.author,
+          date: details.date,
+          message: details.message,
+          changedPaths: details.changedPaths
+        };
+      }
+
       const details = await gitClient.getCommitDetails(config, targetInfo, commitHash);
 
       return {

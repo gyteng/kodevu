@@ -128,6 +128,24 @@ function toRelativePath(targetRepoPath, repoPath) {
   return repoPath.slice(targetRepoPath.length).replace(/^\/+/, "");
 }
 
+function parseSvnStatus(statusText) {
+  return statusText
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\r$/, ""))
+    .filter(Boolean)
+    .map((line) => {
+      const action = (line[0] || " ").trim();
+      const relativePath = line.length > 8 ? line.slice(8).trim() : "";
+      return {
+        action,
+        relativePath,
+        previousPath: null
+      };
+    })
+    .filter((item) => item.relativePath)
+    .filter((item) => ["A", "D", "M", "R"].includes(item.action));
+}
+
 export async function getRevisionDetails(config, targetInfo, revision) {
   const result = await runCommand(
     SVN_COMMAND,
@@ -163,5 +181,39 @@ export async function getRevisionDetails(config, targetInfo, revision) {
     date: entry.date || "",
     message: entry.msg || "",
     changedPaths
+  };
+}
+
+export async function getUncommittedDiff(config, targetInfo) {
+  if (!targetInfo.workingCopyPath) {
+    throw new Error("SVN --uncommitted requires a working copy path target.");
+  }
+
+  const result = await runCommand(
+    SVN_COMMAND,
+    ["diff", "--git", "--internal-diff", "--ignore-properties", config.target],
+    { encoding: COMMAND_ENCODING, trim: false, debug: config.debug }
+  );
+
+  return result.stdout;
+}
+
+export async function getUncommittedDetails(config, targetInfo) {
+  if (!targetInfo.workingCopyPath) {
+    throw new Error("SVN --uncommitted requires a working copy path target.");
+  }
+
+  const statusResult = await runCommand(
+    SVN_COMMAND,
+    ["status", config.target],
+    { encoding: COMMAND_ENCODING, trim: false, debug: config.debug }
+  );
+
+  return {
+    revision: "UNCOMMITTED",
+    author: "working-copy",
+    date: new Date().toISOString(),
+    message: "Uncommitted changes in working copy.",
+    changedPaths: parseSvnStatus(statusResult.stdout)
   };
 }

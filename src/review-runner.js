@@ -155,7 +155,9 @@ export async function runReviewCycle(config) {
 
   let changeIdsToReview = [];
 
-  if (config.rev) {
+  if (config.uncommitted) {
+    changeIdsToReview = ["UNCOMMITTED"];
+  } else if (config.rev) {
     changeIdsToReview = await backend.resolveChangeIds(config, targetInfo, config.rev);
   } else if (config.last < 0) {
     const candidates = await backend.getLatestChangeIds(config, targetInfo, Math.abs(config.last));
@@ -169,7 +171,12 @@ export async function runReviewCycle(config) {
     return;
   }
 
-  logger.info(`Reviewing ${backend.displayName} ${backend.changeName}s ${formatChangeList(backend, changeIdsToReview)}`);
+  const isUncommittedBatch =
+    changeIdsToReview.length === 1 && changeIdsToReview[0] === "UNCOMMITTED";
+  const batchSummary = isUncommittedBatch
+    ? `Reviewing ${backend.displayName} uncommitted changes`
+    : `Reviewing ${backend.displayName} ${backend.changeName}s ${formatChangeList(backend, changeIdsToReview)}`;
+  logger.info(batchSummary);
   const progress = createProgressReporter(`${backend.displayName} ${backend.changeName} batch`);
   progress.update(0, `0/${changeIdsToReview.length} completed`);
 
