@@ -1,5 +1,7 @@
 # Kodevu
 
+> The name **Kodevu** is a phonetic play on "code review".
+
 A Node.js tool that fetches Git commits or SVN revisions, sends the diff to a supported AI reviewer CLI, and writes review results to report files.
 
 ## Pure & Zero Config
@@ -127,13 +129,6 @@ npx kodevu . \
   --openai-model gpt-5-mini
 ```
 
-## How it Works
-
-- **Git Targets**: `target` must be a local repository or subdirectory.
-- **SVN Targets**: `target` can be a working copy path or repository URL.
-- **Reviewer "auto"**: Probes `codex`, `gemini`, and `copilot` in your `PATH` and selects one.
-- **Reviewer "openai"**: Calls the OpenAI Chat Completions API directly. `auto` does not select `openai`, so API-based use stays explicit.
-- **Contextual Review**: For local repositories, the reviewer can inspect related files beyond the diff to provide deeper insights.
 
 ## License
 

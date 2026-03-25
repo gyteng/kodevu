@@ -1,15 +1,15 @@
 ---
 name: kodevu
-description: A tool to fetch Git commits or SVN revisions, send the diff to a supported AI reviewer CLI, and write configurable review reports.
+description: A tool to fetch Git/SVN diffs, send them to an AI reviewer, and generate configurable code review reports.
 ---
 
 # Kodevu Skill
 
-Kodevu is a Node.js tool that fetches Git commits or SVN revisions, sends the diff to a supported AI reviewer CLI, and writes review results to report files.
+Kodevu is a Node.js tool that fetches Git commits or SVN revisions, sends the diff to a supported AI reviewer CLI, and writes review results to report files. It is designed to be **stateless** and requires **no configuration files**.
 
 ## Usage
 
-Use `npx kodevu` to review a codebase. It is designed to be stateless and requires no configuration files.
+Use `npx kodevu` to review a codebase.
 
 ### Reviewing the latest commit
 
@@ -29,13 +29,19 @@ npx kodevu . --rev <commit-hash>
 npx kodevu . --last 3
 ```
 
+### Reviewing uncommitted changes
+
+```bash
+npx kodevu . --uncommitted
+```
+
 ### Supported Reviewers
 
-`kodevu` supports several AI reviewer CLIs: `auto`, `openai`, `gemini`, `codex`, `copilot`. The default is `auto`. Use the `--reviewer` option to override.
+`kodevu` supports several AI reviewer backends: `auto`, `openai`, `gemini`, `codex`, `copilot`. The default is `auto`, which probes available CLI tools in your `PATH`.
 
 Example using OpenAI:
 ```bash
-npx kodevu . --reviewer openai --openai-api-key <YOUR_API_KEY> --openai-model gpt-4o
+npx kodevu . --reviewer openai --openai-api-key <YOUR_API_KEY> --openai-model gpt-5-mini
 ```
 
 ### Generating JSON Reports
@@ -45,19 +51,31 @@ By default, review reports are generated as Markdown files in `~/.kodevu/`. You 
 npx kodevu . --format json --output ./reports
 ```
 
-### Formatting the Prompt
+### Custom Prompts
 
-You can provide clear instructions to the reviewer using `--prompt`:
+You can provide additional instructions to the reviewer using `--prompt`:
 ```bash
 npx kodevu . --prompt "Focus on security issues and suggest optimizations."
 ```
 Or from a file: `--prompt @my-rules.txt`
 
+### Environment Variables
+
+All options can also be set via environment variables to avoid repetitive flags:
+
+- `KODEVU_REVIEWER` – Default reviewer.
+- `KODEVU_LANG` – Default output language.
+- `KODEVU_OUTPUT_DIR` – Default output directory.
+- `KODEVU_PROMPT` – Default prompt instructions.
+- `KODEVU_OPENAI_API_KEY` – API key for `openai`.
+- `KODEVU_OPENAI_BASE_URL` – Base URL for `openai`.
+- `KODEVU_OPENAI_MODEL` – Model for `openai`.
+
 ## Working with Target Repositories
 
-- `target`: Repository path (Git) or SVN URL/Working copy (default: `.`).
+- **Git**: `target` must be a local repository or subdirectory.
+- **SVN**: `target` can be a working copy path or repository URL.
 
-For example, to run on a specific path, you can use:
 ```bash
 npx kodevu /path/to/project --last 1
 ```
