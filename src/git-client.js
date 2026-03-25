@@ -47,13 +47,20 @@ export async function getTargetInfo(config) {
   const lookupCwd = targetStat.isDirectory() ? requestedTargetPath : path.dirname(requestedTargetPath);
   const topLevelResult = await runGit(config, ["rev-parse", "--show-toplevel"], {
     cwd: lookupCwd,
-    trim: true
+    trim: true,
+    allowFailure: true
   });
+
+  if (topLevelResult.code !== 0) {
+    throw new Error(`Git target path is not within a Git repository: ${requestedTargetPath}`);
+  }
+
   const repoRootPath = path.resolve(topLevelResult.stdout);
   const relativeTargetPath = toPosixPath(path.relative(repoRootPath, requestedTargetPath));
   const branchResult = await runGit(config, ["rev-parse", "--abbrev-ref", "HEAD"], {
     cwd: repoRootPath,
-    trim: true
+    trim: true,
+    allowFailure: true
   });
 
   return {

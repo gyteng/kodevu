@@ -98,6 +98,12 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
     }
   }
 
+  if (!reviewerResult || reviewerResult.code !== 0 || reviewerResult.timedOut) {
+    throw new Error(
+      `${reviewer?.displayName || config.reviewer} failed for ${details.displayId}`
+    );
+  }
+
   progress?.update(0.82, "writing report");
   logger.debug(`Token usage: input=${tokenUsage.inputTokens} output=${tokenUsage.outputTokens} total=${tokenUsage.totalTokens} source=${tokenUsage.source}`);
   const report = buildReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage);
@@ -112,14 +118,6 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
     await writeJsonFile(
       jsonOutputFile,
       buildJsonReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage)
-    );
-  }
-
-  if (reviewerResult.code !== 0 || reviewerResult.timedOut) {
-    throw new Error(
-      `${reviewer.displayName} failed for ${details.displayId}; report written to ${outputFile}${
-        shouldWriteFormat(config, "json") ? ` and ${jsonOutputFile}` : ""
-      }`
     );
   }
 
