@@ -50,9 +50,10 @@ export function formatDate(dateInput) {
   const hours = pad(d.getHours());
   const minutes = pad(d.getMinutes());
   const seconds = pad(d.getSeconds());
+  const milliseconds = String(d.getMilliseconds()).padStart(3, "0");
   const offset = `${sign}${pad(offsetHours)}:${pad(offsetMins)}`;
 
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} ${offset}`;
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds} ${offset}`;
 }
 export function getTimestampPrefix() {
   const now = new Date();
