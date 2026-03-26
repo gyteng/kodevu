@@ -105,7 +105,8 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
         reviewer: reviewerName,
         console: false
       });
-      // If it's the last one, it will throw below or break loop anyway
+      // Store the result so the final throw can include stderr/exit code details
+      reviewerResult = err?.result ?? null;
     }
 
     if (reviewerName !== reviewersToTry[reviewersToTry.length - 1]) {
@@ -120,9 +121,23 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
   }
 
   if (!reviewerResult || reviewerResult.code !== 0 || reviewerResult.timedOut) {
-    throw new Error(
-      `${reviewer?.displayName || config.reviewer} failed for ${details.displayId}`
-    );
+    const displayName = reviewer?.displayName || config.reviewer;
+    const reasonParts = [`${displayName} failed for ${details.displayId}`];
+
+    if (reviewerResult?.timedOut) {
+      reasonParts.push("(timed out)");
+    } else if (reviewerResult?.code != null && reviewerResult.code !== 0) {
+      reasonParts.push(`(exit code: ${reviewerResult.code})`);
+    } else if (!reviewerResult) {
+      reasonParts.push("(reviewer produced no result)");
+    }
+
+    const detail = (reviewerResult?.stderr || reviewerResult?.stdout || "").trim();
+    if (detail) {
+      reasonParts.push(`\n${detail}`);
+    }
+
+    throw new Error(reasonParts.join(" "));
   }
 
   progress?.update(0.82, "writing report");

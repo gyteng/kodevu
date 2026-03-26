@@ -17,7 +17,7 @@ const defaultConfig = {
   lang: "auto",
   outputDir: defaultStorageDir,
   logsDir: path.join(defaultStorageDir, "logs"),
-  commandTimeoutMs: 600000,
+  commandTimeoutMs: 120000,
   prompt: "",
   maxRevisionsPerRun: 5,
   outputFormats: ["markdown"],
