@@ -90,7 +90,7 @@ class Logger {
           fs.mkdirSync(config.logsDir, { recursive: true });
         }
         const date = formatDate(new Date()).split(" ")[0];
-        this.logFile = path.join(config.logsDir, `run-${date}-${this.sessionId}.log`);
+        this.logFile = path.join(config.logsDir, `run-${date}.log`);
         
         // Simple rotation: Clean up logs older than 7 days
         this._cleanupOldLogs(config.logsDir);
