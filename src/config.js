@@ -373,7 +373,7 @@ Options:
   --openai-model    Model used when reviewer=openai (default: gpt-5-mini)
   --openai-org      Optional OpenAI organization ID
   --openai-project  Optional OpenAI project ID
-  --debug, -d       Print extra debug information
+  --debug, -d       Show extra debug information on the console
   --help, -h        Show help
   --version, -V     Show version
 

@@ -1,8 +1,2 @@
 node_modules/
 .vscode
-reports/
-data/
-.scratch/
-*.log
-config.json
-config.*.json

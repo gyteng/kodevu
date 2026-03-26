@@ -21,6 +21,7 @@ npx kodevu .
 ```
 
 Review reports are saved to `~/.kodevu/` by default.
+Console output is intentionally concise by default; detailed execution logs are written to `~/.kodevu/logs/`.
 
 ## Usage
 
@@ -44,7 +45,7 @@ npx kodevu [target] [options]
 - `--openai-model`: Model used when `--reviewer openai` (default: `gpt-5-mini`).
 - `--openai-org`: Optional OpenAI organization ID.
 - `--openai-project`: Optional OpenAI project ID.
-- `--debug, -d`: Print debug information.
+- `--debug, -d`: Show extra debug information on the console.
 - `--version, -V`: Print the current version and exit.
 
 > [!IMPORTANT]

@@ -18,7 +18,11 @@ import { runReviewerPrompt } from "./reviewers.js";
 
 async function reviewChange(config, backend, targetInfo, changeId, progress) {
   const displayId = backend.formatChangeId(changeId);
-  logger.info(`Starting review for ${backend.changeName} ${displayId}`);
+  logger.info(`Starting review for ${backend.changeName} ${displayId}`, {
+    scope: "review",
+    repository: backend.kind,
+    changeId: displayId
+  });
   progress?.update(0.05, "loading change details");
   const details = await backend.getChangeDetails(config, targetInfo, changeId);
   const resolvedChangeId = details.id;
@@ -68,7 +72,13 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
 
   for (const reviewerName of reviewersToTry) {
     currentReviewerConfig = { ...config, reviewer: reviewerName };
-    logger.debug(`Trying reviewer: ${reviewerName}`);
+    logger.debug(`Trying reviewer: ${reviewerName}`, {
+      scope: "review",
+      repository: backend.kind,
+      changeId: details.displayId,
+      reviewer: reviewerName,
+      console: "debug"
+    });
     progress?.update(0.45, `running reviewer ${reviewerName}`);
 
     try {
@@ -88,13 +98,24 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
         break;
       }
     } catch (err) {
-      logger.error(`Reviewer prompt failed for ${reviewerName}: ${err.message}`);
+      logger.error(`Reviewer prompt failed for ${reviewerName}`, err, {
+        scope: "review",
+        repository: backend.kind,
+        changeId: details.displayId,
+        reviewer: reviewerName,
+        console: false
+      });
       // If it's the last one, it will throw below or break loop anyway
     }
 
     if (reviewerName !== reviewersToTry[reviewersToTry.length - 1]) {
       const msg = `${reviewer?.displayName || reviewerName} failed for ${details.displayId}; trying next reviewer...`;
-      logger.warn(msg);
+      logger.warn(msg, {
+        scope: "review",
+        repository: backend.kind,
+        changeId: details.displayId,
+        reviewer: reviewerName
+      });
     }
   }
 
@@ -105,7 +126,17 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
   }
 
   progress?.update(0.82, "writing report");
-  logger.debug(`Token usage: input=${tokenUsage.inputTokens} output=${tokenUsage.outputTokens} total=${tokenUsage.totalTokens} source=${tokenUsage.source}`);
+  logger.debug("Token usage recorded", {
+    scope: "review",
+    repository: backend.kind,
+    changeId: details.displayId,
+    reviewer: reviewer.displayName,
+    inputTokens: tokenUsage.inputTokens,
+    outputTokens: tokenUsage.outputTokens,
+    totalTokens: tokenUsage.totalTokens,
+    source: tokenUsage.source,
+    console: "debug"
+  });
   const report = buildReport(currentReviewerConfig, backend, targetInfo, details, diffPayloads, reviewer, reviewerResult, tokenUsage);
   const outputFile = path.join(config.outputDir, backend.getReportFileName(resolvedChangeId));
   const jsonOutputFile = outputFile.replace(/\.md$/i, ".json");
@@ -126,7 +157,13 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
     shouldWriteFormat(config, "json") ? `json: ${jsonOutputFile}` : null
   ].filter(Boolean);
   
-  logger.info(`Completed review for ${displayId}: ${outputLabels.join(" | ") || "(no report file generated)"}`);
+  logger.info(`Completed review for ${displayId}: ${outputLabels.join(" | ") || "(no report file generated)"}`, {
+    scope: "review",
+    repository: backend.kind,
+    changeId: displayId,
+    reviewer: reviewer.displayName,
+    console: true
+  });
 
   return {
     success: true,
@@ -149,9 +186,12 @@ export async function runReviewCycle(config) {
   await ensureDir(config.outputDir);
 
   const { backend, targetInfo } = await resolveRepositoryContext(config);
-  logger.debug(
-    `Resolved repository context: backend=${backend.kind} target=${targetInfo.targetDisplay || config.target}`
-  );
+  logger.debug("Resolved repository context", {
+    scope: "session",
+    backend: backend.kind,
+    target: targetInfo.targetDisplay || config.target,
+    console: "debug"
+  });
 
   let changeIdsToReview = [];
 
@@ -167,7 +207,12 @@ export async function runReviewCycle(config) {
   }
 
   if (changeIdsToReview.length === 0) {
-    logger.info("No changes found to review.");
+    logger.info("No changes found to review.", {
+      scope: "session",
+      backend: backend.kind,
+      target: targetInfo.targetDisplay || config.target,
+      console: true
+    });
     return;
   }
 
@@ -176,12 +221,22 @@ export async function runReviewCycle(config) {
   const batchSummary = isUncommittedBatch
     ? `Reviewing ${backend.displayName} uncommitted changes`
     : `Reviewing ${backend.displayName} ${backend.changeName}s ${formatChangeList(backend, changeIdsToReview)}`;
-  logger.info(batchSummary);
+  logger.info(batchSummary, {
+    scope: "session",
+    backend: backend.kind,
+    count: changeIdsToReview.length,
+    console: true
+  });
   const progress = createProgressReporter(`${backend.displayName} ${backend.changeName} batch`);
   progress.update(0, `0/${changeIdsToReview.length} completed`);
 
   for (const [index, changeId] of changeIdsToReview.entries()) {
-    logger.debug(`Starting review for ${backend.formatChangeId(changeId)}.`);
+    logger.debug(`Starting review for ${backend.formatChangeId(changeId)}`, {
+      scope: "review",
+      repository: backend.kind,
+      changeId: backend.formatChangeId(changeId),
+      console: "debug"
+    });
     const displayId = backend.formatChangeId(changeId);
     updateOverallProgress(progress, index, changeIdsToReview.length, 0, `starting ${displayId}`);
 

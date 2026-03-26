@@ -24,13 +24,18 @@ export async function runCommand(command, args = [], options = {}) {
     debug = false
   } = options;
 
-  logger.debug(
-    `run: ${command} ${args.join(" ")}${cwd ? ` | cwd=${cwd}` : ""}${timeoutMs > 0 ? ` | timeoutMs=${timeoutMs}` : ""}${
-      input ? ` | input=${summarizeOutput(input)}` : ""
-    }`
-  );
+  logger.debug(`run: ${command}`, {
+    scope: "command",
+    command,
+    args,
+    cwd: cwd || "",
+    timeoutMs: timeoutMs || 0,
+    input: input ? summarizeOutput(input) : "",
+    console: debug ? "debug" : false
+  });
 
   return await new Promise((resolve, reject) => {
+    const startedAt = Date.now();
     const child = spawn(command, args, {
       cwd,
       env: {
@@ -54,7 +59,12 @@ export async function runCommand(command, args = [], options = {}) {
     });
 
     child.on("error", (err) => {
-      logger.error(`spawn error: ${command}`, err);
+      logger.error(`spawn error: ${command}`, err, {
+        scope: "command",
+        command,
+        args,
+        cwd: cwd || ""
+      });
       reject(err);
     });
 
@@ -71,14 +81,26 @@ export async function runCommand(command, args = [], options = {}) {
         stdout: trim ? stdout.trim() : stdout,
         stderr: trim ? stderr.trim() : stderr
       };
+      const durationMs = Date.now() - startedAt;
 
-      const level = (result.code !== 0 || result.timedOut) && !allowFailure ? "ERROR" : "DEBUG";
-      const exitMsg = `exit: ${command} code=${result.code} timedOut=${result.timedOut} stdout=${summarizeOutput(result.stdout)} stderr=${summarizeOutput(result.stderr)}`;
+      const exitMeta = {
+        scope: "command",
+        command,
+        args,
+        cwd: cwd || "",
+        code: result.code,
+        timedOut: result.timedOut,
+        allowFailure,
+        durationMs,
+        stdout: summarizeOutput(result.stdout),
+        stderr: summarizeOutput(result.stderr),
+        console: debug ? "debug" : false
+      };
       
-      if (level === "ERROR") {
-        logger.error(exitMsg);
+      if ((result.code !== 0 || result.timedOut) && !allowFailure) {
+        logger.error(`exit: ${command}`, null, exitMeta);
       } else {
-        logger.debug(exitMsg);
+        logger.debug(`exit: ${command}`, exitMeta);
       }
 
       if ((result.code !== 0 || result.timedOut) && !allowFailure) {

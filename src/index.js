@@ -30,33 +30,57 @@ try {
 
   if (config.reviewerWasAutoSelected) {
     logger.info(
-      `Reviewer "auto" selected ${config.reviewer}${config.reviewerCommandPath ? ` (${config.reviewerCommandPath})` : ""}.`
-    );
-  }
-
-  if (config.debug) {
-    logger.debug(
-      `Resolved config: ${JSON.stringify({
+      `Reviewer "auto" selected ${config.reviewer}${config.reviewerCommandPath ? ` (${config.reviewerCommandPath})` : ""}.`,
+      {
+        scope: "session",
         reviewer: config.reviewer,
-        reviewerCommandPath: config.reviewerCommandPath,
-        reviewerWasAutoSelected: config.reviewerWasAutoSelected,
-        openaiBaseUrl: config.openaiBaseUrl,
-        openaiModel: config.openaiModel,
-        openaiOrganization: config.openaiOrganization,
-        openaiProject: config.openaiProject,
-        target: config.target,
-        outputDir: config.outputDir,
-        lang: config.lang,
-        debug: config.debug
-      })}`
+        reviewerCommandPath: config.reviewerCommandPath || "",
+        console: true
+      }
     );
   }
 
-  logger.info(`Session started. Target: ${config.target}`);
+  logger.debug("Resolved config", {
+    scope: "session",
+    reviewer: config.reviewer,
+    reviewerCommandPath: config.reviewerCommandPath || "",
+    reviewerWasAutoSelected: config.reviewerWasAutoSelected || false,
+    openaiBaseUrl: config.openaiBaseUrl,
+    openaiModel: config.openaiModel,
+    openaiOrganization: config.openaiOrganization || "",
+    openaiProject: config.openaiProject || "",
+    target: config.target,
+    outputDir: config.outputDir,
+    lang: config.lang,
+    resolvedLang: config.resolvedLang,
+    debug: config.debug,
+    outputFormats: config.outputFormats,
+    mode: config.uncommitted ? "uncommitted" : config.rev ? "rev" : "last",
+    rev: config.rev || "",
+    last: config.last || 0,
+    console: "debug"
+  });
+
+  logger.info("Session started", {
+    scope: "session",
+    target: config.target,
+    reviewer: config.reviewer,
+    outputDir: config.outputDir,
+    mode: config.uncommitted ? "uncommitted" : config.rev ? "rev" : "last",
+    rev: config.rev || "",
+    last: config.last || 0
+  });
   await runReviewCycle(config);
-  logger.info("Session completed successfully.");
+  logger.info("Session completed successfully", {
+    scope: "session",
+    target: config.target,
+    reviewer: config.reviewer
+  });
 } catch (error) {
-  logger.error("Session failed with error", error);
+  logger.error("Session failed", error, {
+    scope: "session",
+    console: true
+  });
   process.exitCode = 1;
 }
 process.exit(process.exitCode || 0);

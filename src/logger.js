@@ -2,16 +2,87 @@ import fs from "node:fs";
 import path from "node:path";
 import { formatDate } from "./utils.js";
 
+function formatValue(value) {
+  if (value == null) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatMeta(meta = {}) {
+  const parts = [];
+
+  for (const [key, rawValue] of Object.entries(meta)) {
+    if (rawValue == null || rawValue === "") {
+      continue;
+    }
+
+    const value = formatValue(rawValue);
+    if (!value) {
+      continue;
+    }
+
+    if (typeof rawValue === "string") {
+      parts.push(`${key}=${JSON.stringify(value)}`);
+      continue;
+    }
+
+    if (typeof rawValue === "number" || typeof rawValue === "boolean") {
+      parts.push(`${key}=${String(rawValue)}`);
+      continue;
+    }
+
+    parts.push(`${key}=${value}`);
+  }
+
+  return parts.join(" ");
+}
+
+function formatErrorDetails(error) {
+  if (!error) {
+    return "";
+  }
+
+  if (error instanceof Error) {
+    return error.stack || error.message || String(error);
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  try {
+    return JSON.stringify(error, null, 2);
+  } catch {
+    return String(error);
+  }
+}
+
 class Logger {
   constructor() {
     this.config = null;
     this.logFile = null;
+    this.sessionId = null;
     this.initialized = false;
   }
 
   init(config) {
     if (this.initialized) return;
     this.config = config;
+    this.sessionId = this._createSessionId();
     
     if (config.logsDir) {
       try {
@@ -19,7 +90,7 @@ class Logger {
           fs.mkdirSync(config.logsDir, { recursive: true });
         }
         const date = formatDate(new Date()).split(" ")[0];
-        this.logFile = path.join(config.logsDir, `run-${date}.log`);
+        this.logFile = path.join(config.logsDir, `run-${date}-${this.sessionId}.log`);
         
         // Simple rotation: Clean up logs older than 7 days
         this._cleanupOldLogs(config.logsDir);
@@ -30,33 +101,36 @@ class Logger {
     }
   }
 
-  info(message) {
-    this._log("INFO", message);
+  info(message, meta) {
+    this._log("INFO", message, meta);
   }
 
-  warn(message) {
-    this._log("WARN", message);
+  warn(message, meta) {
+    this._log("WARN", message, { ...meta, console: meta?.console ?? true });
   }
 
-  error(message, error) {
-    let msg = message;
-    if (error) {
-      msg += `\n${error.stack || error}`;
-    }
-    this._log("ERROR", msg);
+  error(message, error, meta) {
+    this._log("ERROR", message, {
+      ...meta,
+      console: meta?.console ?? true,
+      error: formatErrorDetails(error)
+    });
   }
 
-  debug(message) {
-    if (this.config?.debug) {
-      this._log("DEBUG", message);
-    }
+  debug(message, meta) {
+    this._log("DEBUG", message, meta);
   }
 
-  _log(level, message) {
+  _log(level, message, meta = {}) {
     const timestamp = formatDate(new Date());
-    const logLine = `[${timestamp}] [${level}] ${message}`;
+    const { console: consoleMode, ...details } = meta;
+    const fields = {
+      session: this.sessionId || "uninitialized",
+      ...details
+    };
+    const metaSuffix = formatMeta(fields);
+    const logLine = `[${timestamp}] [${level}] ${message}${metaSuffix ? ` | ${metaSuffix}` : ""}`;
 
-    // Write to file
     if (this.logFile) {
       try {
         fs.appendFileSync(this.logFile, logLine + "\n");
@@ -65,19 +139,50 @@ class Logger {
       }
     }
 
-    // Console output
-    const isDebug = level === "DEBUG";
-    const isError = level === "ERROR";
-    const isWarn = level === "WARN";
+    if (!this._shouldWriteToConsole(level, consoleMode)) {
+      return;
+    }
 
-    // If it's debug and debug mode is off, skip console
-    if (isDebug && !this.config?.debug) return;
-
-    if (isError || isWarn) {
+    if (level === "ERROR" || level === "WARN") {
       console.error(logLine);
     } else {
       console.log(logLine);
     }
+  }
+
+  _shouldWriteToConsole(level, consoleMode) {
+    if (consoleMode === false) {
+      return false;
+    }
+
+    if (level === "ERROR" || level === "WARN") {
+      return true;
+    }
+
+    if (level === "DEBUG") {
+      if (consoleMode === true) {
+        return Boolean(this.config?.debug);
+      }
+      return false;
+    }
+
+    if (consoleMode === true) {
+      return true;
+    }
+
+    if (consoleMode === "debug") {
+      return Boolean(this.config?.debug);
+    }
+
+    return false;
+  }
+
+  _createSessionId() {
+    return [
+      Date.now().toString(36),
+      process.pid.toString(36),
+      Math.random().toString(36).slice(2, 8)
+    ].join("-");
   }
 
   _cleanupOldLogs(logsDir) {
