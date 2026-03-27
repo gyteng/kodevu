@@ -5,7 +5,7 @@ description: A tool to fetch Git/SVN diffs, send them to an AI reviewer, and gen
 
 # Kodevu Skill
 
-Kodevu is a Node.js tool that fetches Git commits or SVN revisions, sends the diff to a supported AI reviewer CLI, and writes review results to report files. It is designed to be **stateless** and requires **no configuration files**.
+Kodevu is a Node.js tool that fetches Git commits or SVN revisions, sends the diff to a supported AI reviewer CLI, and writes review results to report files. It supports an optional persistent config file at `~/.kodevu/config.json` for settings that should survive across sessions.
 
 ## Usage
 
@@ -70,6 +70,22 @@ All options can also be set via environment variables to avoid repetitive flags:
 - `KODEVU_OPENAI_API_KEY` – API key for `openai`.
 - `KODEVU_OPENAI_BASE_URL` – Base URL for `openai`.
 - `KODEVU_OPENAI_MODEL` – Model for `openai`.
+
+### Configuration File
+
+For persistent settings that survive across shells and AI tool invocations, create `~/.kodevu/config.json`:
+
+```json
+{
+  "reviewer": "openai",
+  "openaiApiKey": "sk-...",
+  "openaiBaseUrl": "https://your-gateway.example.com/v1",
+  "openaiModel": "gpt-4o",
+  "lang": "zh"
+}
+```
+
+The file is optional and silently ignored if absent. Priority: **CLI flags > ENV vars > config file > defaults**.
 
 ## Working with Target Repositories
 

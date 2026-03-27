@@ -6,11 +6,11 @@ A Node.js tool that fetches Git commits or SVN revisions, sends the diff to a su
 
 ## Pure & Zero Config
 
-Kodevu is designed to be stateless and requires no configuration files. It relies entirely on command-line arguments and environment variables.
+Kodevu is designed to be stateless and requires no mandatory configuration. All settings work out-of-the-box via command-line arguments and environment variables, with an optional persistent config file for convenience.
 
 1. **Automatic Detection**: Detects repository type (Git/SVN), language, and available reviewers.
 2. **Stateless**: Does not track history; reviews exactly what you ask for.
-3. **Flexible**: Every setting can be overridden via CLI flags or ENV vars.
+3. **Flexible**: Every setting can be set via config file, ENV var, or CLI flag, with CLI taking highest priority.
 
 ## Quick Start
 
@@ -68,6 +68,28 @@ You can set these in your shell to change default behavior without typing flags 
 - `KODEVU_OPENAI_MODEL`: Model for `openai`.
 - `KODEVU_OPENAI_ORG`: Optional organization ID for `openai`.
 - `KODEVU_OPENAI_PROJECT`: Optional project ID for `openai`.
+
+### Configuration File
+
+For persistent settings that survive across shells and AI tools, create `~/.kodevu/config.json`:
+
+```json
+{
+  "reviewer": "openai",
+  "openaiApiKey": "sk-...",
+  "openaiBaseUrl": "https://your-gateway.example.com/v1",
+  "openaiModel": "gpt-4o",
+  "lang": "zh"
+}
+```
+
+The file is optional and silently ignored if absent. **Priority order** (highest wins):
+
+```
+CLI flags  >  Environment variables  >  Config file  >  Built-in defaults
+```
+
+Supported keys: `reviewer`, `lang`, `outputDir`, `prompt`, `commandTimeoutMs`, `outputFormats`, `openaiApiKey`, `openaiBaseUrl`, `openaiModel`, `openaiOrganization`, `openaiProject`.
 
 ## Examples
 

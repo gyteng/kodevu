@@ -46,6 +46,9 @@ const ENV_MAP = {
   KODEVU_OPENAI_PROJECT: "openaiProject"
 };
 
+const CONFIG_FILE_KEYS = new Set(Object.values(ENV_MAP));
+const defaultConfigFilePath = path.join(defaultStorageDir, "config.json");
+
 function resolvePath(value) {
   if (!value) return value;
   if (value === "~") return os.homedir();
@@ -53,6 +56,33 @@ function resolvePath(value) {
     return path.join(os.homedir(), value.slice(2));
   }
   return path.isAbsolute(value) ? value : path.resolve(process.cwd(), value);
+}
+
+async function loadConfigFile(configPath = defaultConfigFilePath) {
+  const resolvedPath = resolvePath(configPath);
+  let content;
+  try {
+    content = await fs.readFile(resolvedPath, "utf8");
+  } catch (err) {
+    if (err.code === "ENOENT") return {};
+    throw new Error(`Failed to read config file ${resolvedPath}: ${err.message}`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(content);
+  } catch (err) {
+    throw new Error(`Invalid JSON in config file ${resolvedPath}: ${err.message}`);
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`Config file ${resolvedPath} must contain a JSON object`);
+  }
+  const result = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (CONFIG_FILE_KEYS.has(key)) {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 function normalizeOutputFormats(outputFormats) {
@@ -260,6 +290,14 @@ export function parseCliArgs(argv) {
 export async function resolveConfig(cliArgs = {}) {
   const config = { ...defaultConfig };
 
+  // 0. Merge Config File (lowest priority: overridden by env vars and CLI args)
+  const fileConfig = await loadConfigFile();
+  for (const key of CONFIG_FILE_KEYS) {
+    if (fileConfig[key] !== undefined && fileConfig[key] !== "") {
+      config[key] = fileConfig[key];
+    }
+  }
+
   // 1. Merge Environment Variables
   for (const [envVar, configKey] of Object.entries(ENV_MAP)) {
     if (process.env[envVar] !== undefined) {
@@ -388,6 +426,12 @@ Environment Variables:
   KODEVU_OPENAI_MODEL     Model for reviewer=openai
   KODEVU_OPENAI_ORG       Organization ID for reviewer=openai
   KODEVU_OPENAI_PROJECT   Project ID for reviewer=openai
+
+Config File:
+  ~/.kodevu/config.json   Optional persistent settings (overridden by env vars and CLI flags)
+  Supported keys: reviewer, lang, outputDir, prompt, commandTimeoutMs, outputFormats,
+                  openaiApiKey, openaiBaseUrl, openaiModel, openaiOrganization, openaiProject
+  Example: { "reviewer": "openai", "openaiApiKey": "sk-...", "openaiModel": "gpt-4o" }
 `);
 }
 
