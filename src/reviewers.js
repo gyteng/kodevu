@@ -227,11 +227,13 @@ export const REVIEWERS = {
         };
       } catch (error) {
         const timedOut = error?.name === "TimeoutError" || error?.name === "AbortError";
+        const baseMessage = error?.message || String(error);
+        const causeMessage = error?.cause ? ` (Cause: ${error.cause.message || String(error.cause)})` : "";
         return {
           code: 1,
           timedOut,
           stdout: "",
-          stderr: error?.message || String(error),
+          stderr: `${baseMessage}${causeMessage}`,
           message: ""
         };
       }
