@@ -172,6 +172,8 @@ export const REVIEWERS = {
     async run(config, workingDir, promptText, diffText) {
       const requestBody = {
         model: config.openaiModel,
+        stream: true,
+        stream_options: { include_usage: true },
         messages: [
           {
             role: "user",
@@ -188,17 +190,16 @@ export const REVIEWERS = {
           signal: AbortSignal.timeout(config.commandTimeoutMs)
         });
 
-        const responseText = await response.text();
-        let payload;
-
-        try {
-          payload = responseText ? JSON.parse(responseText) : {};
-        } catch {
-          payload = null;
-        }
-
         if (!response.ok) {
-          const errorMessage = payload?.error?.message || responseText || `HTTP ${response.status}`;
+          let errorMessage = `HTTP ${response.status}`;
+          let responseText = "";
+          try {
+            responseText = await response.text();
+            const payload = JSON.parse(responseText);
+            errorMessage = payload?.error?.message || responseText;
+          } catch {
+            if (responseText) errorMessage = responseText;
+          }
           return {
             code: response.status,
             timedOut: false,
@@ -208,19 +209,67 @@ export const REVIEWERS = {
           };
         }
 
-        const message = extractOpenAiMessageContent(payload?.choices?.[0]?.message?.content);
-        const usage = payload?.usage
-          ? {
+        let message = "";
+        let usage = null;
+        let stdoutText = "";
+        const contentType = response.headers.get("content-type") || "";
+
+        if (contentType.includes("text/event-stream")) {
+          const decoder = new TextDecoder("utf8");
+          let buffer = "";
+
+          for await (const chunk of response.body) {
+            const textChunk = decoder.decode(chunk, { stream: true });
+            stdoutText += textChunk;
+            buffer += textChunk;
+            const parts = buffer.split("\n");
+            buffer = parts.pop() || "";
+            for (const line of parts) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith("data: ")) {
+                if (trimmed === "data: [DONE]") continue;
+                try {
+                  const data = JSON.parse(trimmed.slice(6));
+                  if (data.choices?.[0]?.delta?.content) {
+                    message += data.choices[0].delta.content;
+                  }
+                  if (data.usage) {
+                    usage = {
+                      inputTokens: Number(data.usage.prompt_tokens || 0),
+                      outputTokens: Number(data.usage.completion_tokens || 0),
+                      totalTokens: Number(data.usage.total_tokens || 0)
+                    };
+                  }
+                } catch (e) {
+                  // Ignore JSON parse errors for individual chunks
+                }
+              }
+            }
+          }
+        } else {
+          stdoutText = await response.text();
+          let payload;
+
+          try {
+            payload = stdoutText ? JSON.parse(stdoutText) : {};
+          } catch {
+            payload = null;
+          }
+
+          message = extractOpenAiMessageContent(payload?.choices?.[0]?.message?.content);
+          if (payload?.usage) {
+            usage = {
               inputTokens: Number(payload.usage.prompt_tokens || 0),
               outputTokens: Number(payload.usage.completion_tokens || 0),
               totalTokens: Number(payload.usage.total_tokens || 0)
-            }
-          : null;
+            };
+          }
+        }
 
         return {
           code: 0,
           timedOut: false,
-          stdout: responseText,
+          stdout: stdoutText,
           stderr: "",
           message,
           usage
