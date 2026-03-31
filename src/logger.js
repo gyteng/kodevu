@@ -2,87 +2,73 @@ import fs from "node:fs";
 import path from "node:path";
 import { formatDate } from "./utils.js";
 
-function formatValue(value) {
-  if (value == null) {
-    return "";
-  }
-
-  if (typeof value === "string") {
-    return value.trim();
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function formatMeta(meta = {}) {
-  const parts = [];
-
-  for (const [key, rawValue] of Object.entries(meta)) {
-    if (rawValue == null || rawValue === "") {
-      continue;
-    }
-
-    const value = formatValue(rawValue);
-    if (!value) {
-      continue;
-    }
-
-    if (typeof rawValue === "string") {
-      parts.push(`${key}=${JSON.stringify(value)}`);
-      continue;
-    }
-
-    if (typeof rawValue === "number" || typeof rawValue === "boolean") {
-      parts.push(`${key}=${String(rawValue)}`);
-      continue;
-    }
-
-    parts.push(`${key}=${value}`);
-  }
-
-  return parts.join(" ");
-}
-
-function formatErrorDetails(error) {
-  if (!error) {
-    return "";
-  }
-
-  if (error instanceof Error) {
-    return error.stack || error.message || String(error);
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
-  try {
-    return JSON.stringify(error, null, 2);
-  } catch {
-    return String(error);
-  }
-}
+// Top-level helpers moved into Logger as private methods (#name).
 
 class Logger {
-  constructor() {
+  constructor () {
     this.config = null;
     this.logFile = null;
     this.sessionId = null;
     this.initialized = false;
   }
 
+  #formatValue(value) {
+    if (value == null) return "";
+
+    if (typeof value === "string") return value.trim();
+
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+
+  #formatMeta(meta = {}) {
+    const parts = [];
+
+    for (const [key, rawValue] of Object.entries(meta || {})) {
+      if (rawValue == null || rawValue === "") continue;
+
+      const value = this.#formatValue(rawValue);
+      if (!value) continue;
+
+      if (typeof rawValue === "string") {
+        parts.push(`${key}=${JSON.stringify(value)}`);
+        continue;
+      }
+
+      if (typeof rawValue === "number" || typeof rawValue === "boolean") {
+        parts.push(`${key}=${rawValue}`);
+        continue;
+      }
+
+      parts.push(`${key}=${value}`);
+    }
+
+    return parts.join(" ");
+  }
+
+  #formatErrorDetails(error) {
+    if (!error) return "";
+
+    if (error instanceof Error) return error.stack ?? error.message ?? String(error);
+
+    if (typeof error === "string") return error;
+
+    try {
+      return JSON.stringify(error, null, 2);
+    } catch {
+      return String(error);
+    }
+  }
+
   init(config) {
     if (this.initialized) return;
     this.config = config;
-    this.sessionId = this._createSessionId();
+    this.sessionId = this.#createSessionId();
     
     if (config.logsDir) {
       try {
@@ -93,7 +79,7 @@ class Logger {
         this.logFile = path.join(config.logsDir, `run-${date}.log`);
         
         // Simple rotation: Clean up logs older than 7 days
-        this._cleanupOldLogs(config.logsDir);
+        this.#cleanupOldLogs(config.logsDir);
         this.initialized = true;
       } catch (err) {
         console.error(`[logger] Failed to initialize log file: ${err.message}`);
@@ -102,33 +88,33 @@ class Logger {
   }
 
   info(message, meta) {
-    this._log("INFO", message, meta);
+    this.#log("INFO", message, meta);
   }
 
   warn(message, meta) {
-    this._log("WARN", message, { ...meta, console: meta?.console ?? true });
+    this.#log("WARN", message, { ...meta, console: meta?.console ?? true });
   }
 
   error(message, error, meta) {
-    this._log("ERROR", message, {
+    this.#log("ERROR", message, {
       ...meta,
       console: meta?.console ?? true,
-      error: formatErrorDetails(error)
+      error: this.#formatErrorDetails(error)
     });
   }
 
   debug(message, meta) {
-    this._log("DEBUG", message, meta);
+    this.#log("DEBUG", message, meta);
   }
 
-  _log(level, message, meta = {}) {
+  #log(level, message, meta = {}) {
     const timestamp = formatDate(new Date());
     const { console: consoleMode, ...details } = meta;
     const fields = {
       session: this.sessionId || "uninitialized",
       ...details
     };
-    const metaSuffix = formatMeta(fields);
+    const metaSuffix = this.#formatMeta(fields);
     const logLine = `[${timestamp}] [${level}] ${message}${metaSuffix ? ` | ${metaSuffix}` : ""}`;
 
     if (this.logFile) {
@@ -139,7 +125,7 @@ class Logger {
       }
     }
 
-    if (!this._shouldWriteToConsole(level, consoleMode)) {
+    if (!this.#shouldWriteToConsole(level, consoleMode)) {
       return;
     }
 
@@ -150,34 +136,24 @@ class Logger {
     }
   }
 
-  _shouldWriteToConsole(level, consoleMode) {
-    if (consoleMode === false) {
-      return false;
-    }
+  #shouldWriteToConsole(level, consoleMode) {
+    if (consoleMode === false) return false;
 
-    if (level === "ERROR" || level === "WARN") {
-      return true;
-    }
+    if (level === "ERROR" || level === "WARN") return true;
 
     if (level === "DEBUG") {
-      if (consoleMode === true) {
-        return Boolean(this.config?.debug);
-      }
+      if (consoleMode === true) return Boolean(this.config?.debug);
       return false;
     }
 
-    if (consoleMode === true) {
-      return true;
-    }
+    if (consoleMode === true) return true;
 
-    if (consoleMode === "debug") {
-      return Boolean(this.config?.debug);
-    }
+    if (consoleMode === "debug") return Boolean(this.config?.debug);
 
     return false;
   }
 
-  _createSessionId() {
+  #createSessionId() {
     return [
       Date.now().toString(36),
       process.pid.toString(36),
@@ -185,7 +161,9 @@ class Logger {
     ].join("-");
   }
 
-  _cleanupOldLogs(logsDir) {
+
+
+  #cleanupOldLogs(logsDir) {
     try {
       const files = fs.readdirSync(logsDir);
       const now = Date.now();
