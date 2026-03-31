@@ -139,7 +139,7 @@ async function resolveAutoReviewers(debug) {
   }
 
   if (availableReviewers.length === 0) {
-    throw new Error(`No reviewer CLI found in PATH. Install one of: ${AUTO_SUPPORTED_REVIEWERS.join(", ")}`);
+    throw mkCliError(`No reviewer CLI found in PATH. Install one of: ${AUTO_SUPPORTED_REVIEWERS.join(", ")}`);
   }
 
   // Shuffle for variety
@@ -335,11 +335,11 @@ export async function resolveConfig(cliArgs = {}) {
   }
 
   if (cliArgs.rev && cliArgs.last) {
-    throw new Error("Parameters --rev and --last are mutually exclusive. Please specify only one.");
+    throw mkCliError("Parameters --rev and --last are mutually exclusive. Please specify only one.");
   }
 
   if (cliArgs.uncommitted && (cliArgs.rev || cliArgs.last)) {
-    throw new Error("Parameter --uncommitted is mutually exclusive with --rev and --last.");
+    throw mkCliError("Parameter --uncommitted is mutually exclusive with --rev and --last.");
   }
 
   if (!config.target) {
@@ -358,7 +358,7 @@ export async function resolveConfig(cliArgs = {}) {
     try {
       config.prompt = await fs.readFile(promptPath, "utf8");
     } catch (err) {
-      throw new Error(`Failed to read prompt file: ${promptPath} (${err.message})`);
+      throw mkCliError(`Failed to read prompt file: ${promptPath} (${err.message})`);
     }
   }
 
@@ -370,7 +370,7 @@ export async function resolveConfig(cliArgs = {}) {
     config.fallbackReviewers = availableReviewers.map(r => r.reviewerName).slice(1);
     config.reviewerWasAutoSelected = true;
   } else if (!SUPPORTED_REVIEWERS.includes(config.reviewer)) {
-    throw new Error(`"reviewer" must be one of: ${SUPPORTED_REVIEWERS.join(", ")}, or "auto"`);
+    throw mkCliError(`"reviewer" must be one of: ${SUPPORTED_REVIEWERS.join(", ")}, or "auto"`);
   }
 
   config.outputDir = resolvePath(config.outputDir);
@@ -391,7 +391,7 @@ export async function resolveConfig(cliArgs = {}) {
   }
 
   if (config.reviewer === "openai" && !config.openaiApiKey) {
-    throw new Error('Reviewer "openai" requires an API key. Set KODEVU_OPENAI_API_KEY or pass --openai-api-key.');
+    throw mkCliError('Reviewer "openai" requires an API key. Set KODEVU_OPENAI_API_KEY or pass --openai-api-key.');
   }
 
   return config;
