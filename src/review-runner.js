@@ -137,7 +137,14 @@ async function reviewChange(config, backend, targetInfo, changeId, progress) {
       reasonParts.push(`\n${detail}`);
     }
 
-    throw new Error(reasonParts.join(" "));
+    const err = new Error(reasonParts.join(" "));
+    // Prefer reviewer-provided exit code when available (HTTP status or child exit code), otherwise 3
+    try {
+      err.exitCode = reviewerResult?.code || 3;
+    } catch {
+      err.exitCode = 3;
+    }
+    throw err;
   }
 
   progress?.update(0.82, "writing report");

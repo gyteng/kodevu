@@ -31,6 +31,13 @@ const defaultConfig = {
   openaiProject: ""
 };
 
+function mkCliError(message) {
+  const e = new Error(message);
+  // exit code 2 = usage / configuration errors
+  e.exitCode = 2;
+  return e;
+}
+
 const ENV_MAP = {
   KODEVU_REVIEWER: "reviewer",
   KODEVU_LANG: "lang",
@@ -65,16 +72,16 @@ async function loadConfigFile(configPath = defaultConfigFilePath) {
     content = await fs.readFile(resolvedPath, "utf8");
   } catch (err) {
     if (err.code === "ENOENT") return {};
-    throw new Error(`Failed to read config file ${resolvedPath}: ${err.message}`);
+    throw mkCliError(`Failed to read config file ${resolvedPath}: ${err.message}`);
   }
   let parsed;
   try {
     parsed = JSON.parse(content);
   } catch (err) {
-    throw new Error(`Invalid JSON in config file ${resolvedPath}: ${err.message}`);
+    throw mkCliError(`Invalid JSON in config file ${resolvedPath}: ${err.message}`);
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    throw new Error(`Config file ${resolvedPath} must contain a JSON object`);
+    throw mkCliError(`Config file ${resolvedPath} must contain a JSON object`);
   }
   const result = {};
   for (const [key, value] of Object.entries(parsed)) {
@@ -93,7 +100,7 @@ function normalizeOutputFormats(outputFormats) {
   const invalid = normalized.filter((item) => !supported.includes(item));
 
   if (invalid.length > 0) {
-    throw new Error(`Unsupported output format(s): ${invalid.join(", ")}. Use: ${supported.join(", ")}`);
+    throw mkCliError(`Unsupported output format(s): ${invalid.join(", ")}. Use: ${supported.join(", ")}`);
   }
   return normalized.length === 0 ? ["markdown"] : normalized;
 }
@@ -187,28 +194,28 @@ export function parseCliArgs(argv) {
     const hasNextValue = nextValue && !nextValue.startsWith("-");
 
     if (value === "--reviewer" || value === "-r") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      if (!hasNextValue) throw mkCliError(`Missing value for ${value}`);
       args.reviewer = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--prompt" || value === "-p") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      if (!hasNextValue) throw mkCliError(`Missing value for ${value}`);
       args.prompt = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--lang" || value === "-l") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      if (!hasNextValue) throw mkCliError(`Missing value for ${value}`);
       args.lang = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--rev" || value === "-v") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      if (!hasNextValue) throw mkCliError(`Missing value for ${value}`);
       args.rev = nextValue;
       index += 1;
       continue;
@@ -216,7 +223,7 @@ export function parseCliArgs(argv) {
 
     if (value === "--last" || value === "-n") {
       const hasLastValue = nextValue !== undefined && /^-?\d+$/.test(nextValue);
-      if (!hasLastValue) throw new Error(`Missing value for ${value}`);
+      if (!hasLastValue) throw mkCliError(`Missing value for ${value}`);
       args.last = nextValue;
       index += 1;
       continue;
@@ -228,49 +235,49 @@ export function parseCliArgs(argv) {
     }
 
     if (value === "--output" || value === "-o") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      if (!hasNextValue) throw mkCliError(`Missing value for ${value}`);
       args.outputDir = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--format" || value === "-f") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      if (!hasNextValue) throw mkCliError(`Missing value for ${value}`);
       args.outputFormats = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--openai-api-key") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      if (!hasNextValue) throw mkCliError(`Missing value for ${value}`);
       args.openaiApiKey = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--openai-base-url") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      if (!hasNextValue) throw mkCliError(`Missing value for ${value}`);
       args.openaiBaseUrl = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--openai-model") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      if (!hasNextValue) throw mkCliError(`Missing value for ${value}`);
       args.openaiModel = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--openai-org") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      if (!hasNextValue) throw mkCliError(`Missing value for ${value}`);
       args.openaiOrganization = nextValue;
       index += 1;
       continue;
     }
 
     if (value === "--openai-project") {
-      if (!hasNextValue) throw new Error(`Missing value for ${value}`);
+      if (!hasNextValue) throw mkCliError(`Missing value for ${value}`);
       args.openaiProject = nextValue;
       index += 1;
       continue;
@@ -281,7 +288,7 @@ export function parseCliArgs(argv) {
       continue;
     }
 
-    throw new Error(`Unexpected argument: ${value}`);
+    throw mkCliError(`Unexpected argument: ${value}`);
   }
 
   return args;

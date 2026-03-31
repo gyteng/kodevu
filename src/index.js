@@ -11,7 +11,9 @@ try {
 } catch (error) {
   console.error(error?.message || String(error));
   printHelp();
-  process.exit(1);
+  // CLI/usage errors -> exit code 2
+  const code = Number(error?.exitCode) || 2;
+  process.exit(code);
 }
 
 if (cliArgs.help) {
@@ -81,6 +83,7 @@ try {
     scope: "session",
     console: true
   });
-  process.exitCode = 1;
+  // Map any attached exitCode (from thrown errors) to process exitCode, fallback to 1
+  process.exitCode = Number(error?.exitCode) || 1;
 }
 process.exit(process.exitCode || 0);

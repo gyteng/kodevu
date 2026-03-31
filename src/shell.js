@@ -65,6 +65,13 @@ export async function runCommand(command, args = [], options = {}) {
         args,
         cwd: cwd || ""
       });
+      // Mark spawn/runtime errors as runtime failures (exit code 3)
+      try {
+        if (!err || typeof err !== "object") err = new Error(String(err));
+        if (err.exitCode == null) err.exitCode = 3;
+      } catch (e) {
+        // ignore
+      }
       reject(err);
     });
 
@@ -108,6 +115,8 @@ export async function runCommand(command, args = [], options = {}) {
           `Command failed: ${command} ${args.join(" ")}\n${result.stderr || result.stdout}`.trim()
         );
         error.result = result;
+        // Map command failures to exit code 3 (runtime / external command failure)
+        error.exitCode = 3;
         reject(error);
         return;
       }
