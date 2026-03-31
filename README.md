@@ -23,6 +23,16 @@ npx kodevu .
 Review reports are saved to `~/.kodevu/` by default.
 Console output is intentionally concise by default; detailed execution logs are written to `~/.kodevu/logs/`.
 
+## Install as an AI Agent Skill
+
+Kodevu includes a natively supported `SKILL.md` file, which allows it to be installed as a specialized skill in AI agent coding assistants.
+
+To install:
+
+```bash
+npx skills add gyteng/kodevu
+```
+
 ## Usage
 
 ```bash
