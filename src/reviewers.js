@@ -180,13 +180,8 @@ export const REVIEWERS = {
           "utf8"
         );
 
-        const args = [
-          "run",
-          "Please perform the code review strictly following the instructions and unified diff provided in the attached file.",
-          "-f",
-          reviewInputFile,
-          "--pure"
-        ];
+        // Use a short message on the command line and pass full instructions via -f file
+        const args = ["run", "Review attached file", "-f", reviewInputFile, "--pure"];
 
         const execResult = await runCommand("opencode", args, {
           cwd: workingDir,
@@ -197,7 +192,7 @@ export const REVIEWERS = {
 
         return {
           ...execResult,
-          message: execResult.stdout
+          message: execResult.stdout || execResult.stderr || ""
         };
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
