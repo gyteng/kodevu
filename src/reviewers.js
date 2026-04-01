@@ -190,9 +190,21 @@ export const REVIEWERS = {
           debug: config.debug
         });
 
+        const message = execResult.stdout || execResult.stderr || "";
+
+        // Treat non-zero exit codes as failures and throw so callers can handle them.
+        if (typeof execResult.code === "number" && execResult.code !== 0) {
+          const err = new Error(
+            `OpenCode exited with code ${execResult.code}: ${execResult.stderr || execResult.stdout || ""}`
+          );
+          // attach execResult for callers that want more details
+          err.execResult = execResult;
+          throw err;
+        }
+
         return {
           ...execResult,
-          message: execResult.stdout || execResult.stderr || ""
+          message
         };
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true });
