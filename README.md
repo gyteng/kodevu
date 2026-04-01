@@ -42,7 +42,7 @@ npx kodevu [target] [options]
 ### Options
 
 - `target`: Repository path (Git) or SVN URL/Working copy (default: `.`).
-- `--reviewer, -r`: `codex`, `gemini`, `copilot`, `openai`, or `auto` (default: `auto`).
+- `--reviewer, -r`: `codex`, `gemini`, `copilot`, `openai`, `opencode` or `auto` (default: `auto`).
 - `--rev, -v`: A specific revision or commit hash to review.
 - `--last, -n`: Number of latest revisions to review (default: 1). Use negative values (e.g., `-3`) to review only the 3rd commit from the top.
 - `--uncommitted, -u`: Review current uncommitted changes in the target working tree.

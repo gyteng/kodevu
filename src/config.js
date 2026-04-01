@@ -8,8 +8,8 @@ const require = createRequire(import.meta.url);
 const { version: packageVersion } = require("../package.json");
 
 const defaultStorageDir = path.join(os.homedir(), ".kodevu");
-const SUPPORTED_REVIEWERS = ["codex", "gemini", "copilot", "openai"];
-const AUTO_SUPPORTED_REVIEWERS = ["codex", "gemini", "copilot"];
+const SUPPORTED_REVIEWERS = ["codex", "gemini", "copilot", "openai", "opencode"];
+const AUTO_SUPPORTED_REVIEWERS = ["codex", "gemini", "copilot", "opencode"];
 
 const defaultConfig = {
   reviewer: "auto",
@@ -405,7 +405,7 @@ Usage:
 
 Options:
   --target, <path>  Target repository path (default: current directory)
-  --reviewer, -r    Reviewer (codex | gemini | copilot | openai | auto, default: auto)
+  --reviewer, -r    Reviewer (codex | gemini | copilot | openai | opencode | auto, default: auto)
   --prompt, -p      Additional instructions or @file.txt to read from file
   --lang, -l        Output language (e.g. zh, en, auto)
   --rev, -v         Review specific revision(s), hashes, branches or ranges (comma-separated)

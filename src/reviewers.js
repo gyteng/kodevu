@@ -165,6 +165,45 @@ export const REVIEWERS = {
       }
     }
   },
+  opencode: {
+    displayName: "OpenCode",
+    responseSectionTitle: "OpenCode Response",
+    emptyResponseText: "_No final response returned from opencode._",
+    async run(config, workingDir, promptText, diffText) {
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "kodevu-opencode-"));
+      const reviewInputFile = path.join(tempDir, "review-input.md");
+
+      try {
+        await fs.writeFile(
+          reviewInputFile,
+          [promptText, "### Unified Diff", "```diff", diffText, "```"].join("\n\n"),
+          "utf8"
+        );
+
+        const args = [
+          "run",
+          "Please perform the code review strictly following the instructions and unified diff provided in the attached file.",
+          "-f",
+          reviewInputFile,
+          "--pure"
+        ];
+
+        const execResult = await runCommand("opencode", args, {
+          cwd: workingDir,
+          allowFailure: true,
+          timeoutMs: config.commandTimeoutMs,
+          debug: config.debug
+        });
+
+        return {
+          ...execResult,
+          message: execResult.stdout
+        };
+      } finally {
+        await fs.rm(tempDir, { recursive: true, force: true });
+      }
+    }
+  },
   openai: {
     displayName: "OpenAI API",
     responseSectionTitle: "OpenAI Response",
