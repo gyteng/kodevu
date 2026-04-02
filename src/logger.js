@@ -78,7 +78,7 @@ class Logger {
         const date = formatDate(new Date()).split(" ")[0];
         this.logFile = path.join(config.logsDir, `run-${date}.log`);
         
-        // Simple rotation: Clean up logs older than 7 days
+        // Simple rotation: Keep the most recent 7 log files
         this.#cleanupOldLogs(config.logsDir);
         this.initialized = true;
       } catch (err) {
@@ -161,21 +161,32 @@ class Logger {
     ].join("-");
   }
 
-
-
   #cleanupOldLogs(logsDir) {
     try {
       const files = fs.readdirSync(logsDir);
-      const now = Date.now();
-      const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-      for (const file of files) {
-        if (file.startsWith("run-") && file.endsWith(".log")) {
+      const logFiles = files
+        .filter((file) => file.startsWith("run-") && file.endsWith(".log"))
+        .map((file) => {
           const filePath = path.join(logsDir, file);
-          const stats = fs.statSync(filePath);
-          if (now - stats.mtimeMs > MAX_AGE_MS) {
-            fs.unlinkSync(filePath);
+          try {
+            const stats = fs.statSync(filePath);
+            return { file, path: filePath, mtime: stats.mtimeMs };
+          } catch {
+            return null;
           }
+        })
+        .filter(Boolean)
+        .sort((a, b) => b.mtime - a.mtime);
+
+      const KEEP_COUNT = 7;
+      const toRemove = logFiles.slice(KEEP_COUNT);
+
+      for (const entry of toRemove) {
+        try {
+          fs.unlinkSync(entry.path);
+        } catch {
+      // Ignore individual deletion errors
         }
       }
     } catch (err) {
